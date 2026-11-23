@@ -1,0 +1,162 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DeletePartnerDialog } from '@/partners/components/admin/DeletePartnerDialog';
+import { DynamicForm } from '@/partners/components/forms/DynamicForm';
+import { Avatar, Button, Card, Chips, DataTable, Modal, PageHeader, Pagination, SearchInput, Select, StatusBadge, useToast } from '@/partners/components/ui';
+import { useList } from '@/partners/hooks/useList';
+import { api } from '@/partners/api';
+import { LOGIN_PATH } from '@/lib/sso';
+import { date } from '@/partners/lib/format';
+
+import { R } from '@/partners/lib/validate';
+
+const NEW_FIELDS = [
+  { name: 'name', label: 'Full name', required: true, rule: R.person },
+  { name: 'email', label: 'Email', type: 'email', required: true },
+  { name: 'phone', label: 'Phone', type: 'tel' },
+  { name: 'company', label: 'Company', rule: R.company },
+  { name: 'city', label: 'City', rule: R.city },
+  { name: 'password', label: 'Password', required: true, placeholder: 'At least 8 characters', hint: 'Emailed to the partner with the portal link', rule: v => (v.length < 8 ? 'Use at least 8 characters' : null) },
+];
+
+const STATUS_TABS = [
+  { value: 'All', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'disabled', label: 'Suspended' },
+];
+const SOURCES = [
+  { value: 'main-site', label: 'Main website' },
+  { value: 'admin', label: 'Added by admin' },
+  { value: 'seed', label: 'Demo data' },
+];
+
+export default function PartnersPage() {
+  const toast = useToast();
+  const navigate = useNavigate();
+  // Partners only: staff who run Partners have an admin profile here too (one login, docs/SSO.md),
+  // but they are managed in Users & roles, not listed as partners.
+  const list = useList('/admin/users?role=partner', 'users', { sort: '-createdAt' });
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+
+  const [created, setCreated] = useState(null);
+
+  async function create(v) {
+    const res = await api.post('/admin/users', v);
+    setAdding(false);
+    setCreated({ email: String(v.email), password: String(v.password), mail: res.mail });
+    list.reload();
+  }
+
+  async function setStatus(u, status) {
+    try {
+      await api.patch(`/admin/users/${u.id}`, { status });
+      toast(status === 'disabled' ? `${u.name} suspended` : `${u.name} reactivated`);
+      list.reload();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Admin"
+        title="Partners"
+        subtitle="Accounts created here or from the main website through POST /api/v1/users."
+        actions={<Button variant="fire" icon="plus" onClick={() => setAdding(true)}>Add partner</Button>}
+      />
+
+      <div className="toolbar">
+        <SearchInput value={list.q} onChange={list.setQ} placeholder="Search name, email, company, code or phone" width={420} />
+        <Chips tabs={STATUS_TABS} value={list.filters.status || 'All'} onChange={v => list.setFilter('status', v === 'All' ? '' : v)} />
+        <div style={{ width: 200 }}>
+          <Select options={SOURCES} placeholder="Any source" value={list.filters.source ?? ''} onChange={e => list.setFilter('source', e.target.value)} aria-label="Source" />
+        </div>
+        {list.filtered && <Button size="sm" variant="ghost" icon="x" onClick={list.clear}>Clear</Button>}
+      </div>
+
+      <Card>
+        <DataTable
+          rows={list.items}
+          loading={list.loading}
+          rowKey={u => u.id}
+          onRowClick={u => u.role === 'partner' && navigate(`/partners/admin/partners/${u.id}`)}
+          minWidth={980}
+          sort={list.sort}
+          onSort={list.setSort}
+          empty={list.filtered ? 'No partners match your search.' : 'No partners yet.'}
+          footer={<Pagination meta={list.meta} onPage={list.setPage} onLimit={list.setLimit} label="accounts" />}
+          columns={[
+            {
+              key: 'name', header: 'Partner', width: 'minmax(0,1.8fr)', sort: 'name',
+              render: u => (
+                <div className="row" style={{ minWidth: 0 }}>
+                  <Avatar name={u.name} size="s" />
+                  <div style={{ minWidth: 0 }}><div className="strong">{u.name}</div><div className="sub">{u.email}</div></div>
+                </div>
+              ),
+            },
+            { key: 'code', header: 'Code', width: '100px', render: u => <span className="mono sub">{u.partnerCode || (u.role === 'admin' ? 'admin' : '—')}</span> },
+            { key: 'company', header: 'Company', sort: 'company', render: u => u.company || '—' },
+            { key: 'rate', header: 'Commission', width: '120px', sort: 'commissionRate', render: u => <span className="num strong">{u.role === 'partner' ? `${Math.round(u.commissionRate * 100)}%` : '—'}</span> },
+            { key: 'src', header: 'Source', width: '100px', render: u => <span className="sub">{u.source}</span> },
+            { key: 'joined', header: 'Joined', width: '100px', sort: 'createdAt', render: u => <span className="sub">{date(u.createdAt)}</span> },
+            { key: 'login', header: 'Last login', width: '110px', sort: 'lastLoginAt', render: u => <span className="sub">{u.lastLoginAt ? date(u.lastLoginAt) : 'Never'}</span> },
+            { key: 'status', header: 'Status', width: '100px', render: u => <StatusBadge status={u.status} /> },
+            {
+              key: 'act', header: '', width: '160px', align: 'right',
+              render: u =>
+                u.role === 'partner' && (
+                  <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                    {u.status === 'disabled' ? (
+                      <Button size="xs" variant="good" onClick={() => setStatus(u, 'active')}>Reactivate</Button>
+                    ) : (
+                      <Button size="xs" variant="danger" onClick={() => confirm(`Suspend ${u.name}?`) && setStatus(u, 'disabled')}>Suspend</Button>
+                    )}
+                    <Button size="xs" variant="danger" icon="trash" aria-label={`Delete ${u.name}`} title="Delete partner" onClick={() => setDeleting(u)} />
+                  </span>
+                ),
+            },
+          ]}
+        />
+      </Card>
+
+      {deleting && (
+        <DeletePartnerDialog
+          partner={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => { toast(`${deleting.name} deleted`); setDeleting(null); list.reload(); }}
+        />
+      )}
+
+      <Modal open={adding} title="Add partner" onClose={() => setAdding(false)}>
+        <DynamicForm fields={NEW_FIELDS} submitLabel="Create partner" onSubmit={create} onCancel={() => setAdding(false)} />
+      </Modal>
+
+      {created && (
+        <Modal open title="Partner created" onClose={() => setCreated(null)}>
+          <div className="stack">
+            {created.mail.sent ? (
+              <div className="note good"><span>Login details emailed to <b>{created.mail.to}</b>: the portal link, their email and password.</span></div>
+            ) : (
+              <div className="form-error">The email could not be sent ({created.mail.error}). Share these login details with the partner yourself.</div>
+            )}
+            <div className="note">
+              <span className="lbl">Login details</span>
+              <span className="mono" style={{ fontSize: 13, lineHeight: 1.8 }}>{loginUrl()}<br />{created.email}<br />{created.password}</span>
+            </div>
+            <div className="form-foot">
+              <Button icon="copy" onClick={() => { navigator.clipboard.writeText(`Portal: ${loginUrl()}\nEmail: ${created.email}\nPassword: ${created.password}`); toast('Login details copied'); }}>Copy details</Button>
+              <Button variant="ink" onClick={() => setCreated(null)}>Done</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** The one Mariox sign-in page; partners land on their dashboard after signing in there. */
+const loginUrl = () => `${window.location.origin}${LOGIN_PATH}`;

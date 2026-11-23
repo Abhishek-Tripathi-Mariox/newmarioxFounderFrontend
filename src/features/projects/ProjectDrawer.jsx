@@ -1,0 +1,183 @@
+import { Button, Drawer, ProgressBar, Select } from '@/components/ui';
+import { useIsPM } from '@/hooks/useIsPM';
+import { useStore } from '@/store';
+import { useScoped } from '@/hooks/useScoped';
+import { useProjectsModel } from '@/hooks/useProjectsModel';
+import { INK, RED, barColor } from '@/lib/color';
+import { fd } from '@/lib/date';
+import { hh, money, pctW } from '@/lib/format';
+import { HealthPill } from './components/bits';
+import PortalSection from './drawer/PortalSection';
+import DocsLinksSection from './drawer/DocsLinksSection';
+import IntegrationsSection from './drawer/IntegrationsSection';
+import MilestonesSection from './drawer/MilestonesSection';
+import CrSection from './drawer/CrSection';
+import FollowUpsSection from './drawer/FollowUpsSection';
+import TeamSection from './drawer/TeamSection';
+import DayWorkSection from './drawer/DayWorkSection';
+import { BugsSection, RecentLogsSection, TasksSection } from './drawer/WorkItemsSections';
+import { STATUS_KEYS } from './lib/view';
+import s from './drawer/drawer.module.css';
+
+function Fact({ label, children }) {
+  return (
+    <div>
+      <div className={s.factLabel}>{label}</div>
+      <div className={s.factValue}>{children}</div>
+    </div>
+  );
+}
+
+/** Project detail drawer (pj.selP). Rendered by DrawerHost; takes no props. */
+export default function ProjectDrawer() {
+  const selP = useStore((st) => st.pj.selP);
+  const setPj = useStore((st) => st.setPj);
+  const updProj = useStore((st) => st.updProj);
+  const flash = useStore((st) => st.flash);
+  const openModal = useStore((st) => st.openModal);
+  const isPM = useIsPM();
+  const { members } = useScoped();
+  const model = useProjectsModel();
+
+  const sp = model.PRJ[selP];
+  if (!sp) return null;
+
+  const I = model.info(sp);
+  const H = model.g(`p:${sp.id}`);
+  const rem = I.budget - I.used;
+  const pm = members.find((m) => m.id === sp.pm);
+  const close = () => setPj({ selP: null });
+  const sectionProps = { project: sp, info: I, model };
+
+  const stats = [
+    { label: 'Hours used', value: hh(I.used), sub: `of ${hh(I.budget)} · ${Math.round(I.pct * 100)}%`, color: I.pct > 1 ? RED : INK },
+    { label: 'Today', value: hh(H.today) },
+    { label: 'Yesterday', value: hh(H.yest) },
+    { label: 'This week', value: hh(H.week) },
+    { label: 'This month', value: hh(H.month) },
+    { label: rem >= 0 ? 'Remaining' : 'Over budget', value: hh(Math.abs(rem)), color: rem < 0 ? RED : INK },
+  ];
+
+  const header = (
+    <div className={s.minw}>
+      <div className={s.headMeta}>
+        <span className={s.mono}>{sp.id}</span> · {sp.service}
+      </div>
+      <h2 className={s.headName}>{sp.name}</h2>
+      <div className={s.headClient}>{sp.client}</div>
+    </div>
+  );
+
+  const statusSelect = (
+    <Select
+      unstyled
+      className={s.statusSelect}
+      style={{ background: I.st.bg, color: I.st.fg }}
+      value={sp.status}
+      aria-label="Project status"
+      options={STATUS_KEYS}
+      onChange={(e) => {
+        const v = e.target.value;
+        // Putting a project on hold asks why (client end, third party…).
+        if (v === 'On hold' && sp.status !== 'On hold') { openModal('pstatus', { pid: sp.id, status: 'On hold' }); return; }
+        updProj(sp.id, { status: v });
+        flash(`${sp.name} → ${v}`);
+      }}
+    />
+  );
+
+  const actions = (
+    <>
+      {isPM(sp) && (
+        <Button size="sm" onClick={() => openModal('proj', { editId: sp.id })}>
+          Edit
+        </Button>
+      )}
+      {statusSelect}
+    </>
+  );
+
+  return (
+    <Drawer open onClose={close} width={760} header={header} actions={actions} label={sp.name}>
+        <div className={s.facts}>
+          <Fact label="Project manager">{pm ? pm.name : '—'}</Fact>
+          <Fact label="Start">{fd(sp.start)}</Fact>
+          <Fact label="Due">
+            <span style={{ color: I.dueColor }}>{I.dueLabel}</span> <span className={s.factSub}>· {I.dueSub}</span>
+          </Fact>
+          <Fact label="Expected delivery">
+            {I.expLabel ? (
+              <>
+                <span style={{ color: I.expColor }}>{I.expLabel}</span> <span className={s.factSub}>· {I.expSub}</span>
+              </>
+            ) : (
+              <span className={s.factSub}>Not set</span>
+            )}
+          </Fact>
+          <Fact label="Contract value">{sp.value ? money(sp.value) : '—'}</Fact>
+          <Fact label="Health">
+            <HealthPill bg={I.hBg} fg={I.hFg}>
+              {I.hLabel}
+            </HealthPill>
+          </Fact>
+        </div>
+
+        <div className={s.statsWrap}>
+          <div className={s.stats}>
+            {stats.map((x) => (
+              <div key={x.label} className={s.stat}>
+                <div className={s.statLabel}>{x.label}</div>
+                <div className={s.statValue} style={{ color: x.color || INK }}>
+                  {x.value}
+                </div>
+                <div className={s.statSub}>{x.sub || ''}</div>
+              </div>
+            ))}
+          </div>
+          <ProgressBar width={pctW(I.pct)} color={barColor(I.pct)} />
+        </div>
+
+        {(sp.statusReason || sp.statusNote) ? (
+          <div className={`${s.statusNote} ${sp.status === 'On hold' ? s.statusNoteHold : ''}`}>
+            <div className={s.statusNoteHead}>
+              <span className={s.statusNoteTitle}>{sp.status === 'On hold' ? '⏸ Why on hold' : '⚠ Why delayed'}</span>
+              {sp.statusReason && <span className={s.statusReason}>{sp.statusReason}</span>}
+              {sp.statusNoteAt && <span className={s.statusNoteAt}>since {fd(sp.statusNoteAt)}</span>}
+              {isPM(sp) && (
+                <button type="button" className={s.statusNoteEdit} onClick={() => openModal('pstatus', { pid: sp.id })}>Edit</button>
+              )}
+            </div>
+            {sp.statusNote && <div className={s.statusNoteText}>{sp.statusNote}</div>}
+          </div>
+        ) : isPM(sp) && (
+          <button type="button" className={s.addStatusNote} onClick={() => openModal('pstatus', { pid: sp.id })}>
+            + Add a hold / delay note (client end, third party…)
+          </button>
+        )}
+
+        {I.why.length > 0 && (
+          <div className={s.why}>
+            <div className={s.whyTitle}>Health score {I.score}/100 · what’s pulling it down</div>
+            {I.why.map((t) => (
+              <div key={t} className={s.whyItem}>
+                <span className={s.whyDot} />
+                {t}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <PortalSection {...sectionProps} />
+        <DocsLinksSection {...sectionProps} />
+        <IntegrationsSection {...sectionProps} />
+        <MilestonesSection {...sectionProps} />
+        <FollowUpsSection {...sectionProps} />
+        <CrSection {...sectionProps} />
+        <TeamSection {...sectionProps} />
+        <TasksSection {...sectionProps} />
+        <BugsSection {...sectionProps} />
+        <DayWorkSection {...sectionProps} />
+        <RecentLogsSection {...sectionProps} />
+    </Drawer>
+  );
+}

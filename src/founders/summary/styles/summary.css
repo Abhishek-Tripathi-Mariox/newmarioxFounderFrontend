@@ -1,0 +1,82 @@
+/* Styles for the Summary page only (scoped under .mx-summary so the rest of Founders HQ is unchanged). */
+.mx-summary {
+  --ink: oklch(0.23 0.015 265);
+  --muted: oklch(0.47 0.015 265);
+  --muted-2: oklch(0.45 0.015 265);
+  --line: oklch(0.92 0.005 265);
+  --line-soft: oklch(0.94 0.005 265);
+  --bg: oklch(0.975 0.003 265);
+  --surface: #fff;
+  --sunken: oklch(0.97 0.004 265);
+  --seg-bg: oklch(0.935 0.005 265);
+  --link: oklch(0.45 0.17 265);
+  --red: oklch(0.5 0.19 25);
+
+  --side: oklch(0.21 0.02 265);
+  --side-2: oklch(0.25 0.022 265);
+  --side-active: oklch(0.31 0.03 265);
+  --side-text: oklch(0.9 0.01 265);
+  --side-muted: oklch(0.76 0.015 265);
+
+  --mariox: oklch(0.5 0.17 265);
+  --mariox-tint: oklch(0.95 0.03 265);
+  --mariox-ink: oklch(0.42 0.15 265);
+  --partners: oklch(0.74 0.14 60);
+  --partners-tint: oklch(0.95 0.045 70);
+  --partners-ink: oklch(0.44 0.11 55);
+
+  --good-bg: oklch(0.95 0.04 150);
+  --good-fg: oklch(0.4 0.11 150);
+  --bad-bg: oklch(0.95 0.035 25);
+  --bad-fg: oklch(0.47 0.18 25);
+  --warn-bg: oklch(0.96 0.05 85);
+  --warn-fg: oklch(0.44 0.1 65);
+  --info-bg: oklch(0.95 0.03 240);
+  --info-fg: oklch(0.42 0.11 240);
+  --flat-bg: oklch(0.95 0.005 265);
+  --flat-fg: oklch(0.42 0.015 265);
+  --violet-bg: oklch(0.95 0.03 300);
+  --violet-fg: oklch(0.44 0.13 300);
+  --sample-bg: oklch(0.95 0.04 85);
+  --sample-fg: oklch(0.42 0.1 70);
+
+  --radius: 14px;
+  --shadow-pressed: 0 1px 2px oklch(0.2 0.02 265 / 0.14);
+}
+
+.mx-summary h1,
+.mx-summary h2,
+.mx-summary h3,
+.mx-summary p {
+  margin: 0;
+}
+
+/* Plain links only: styled buttons (a with a class) keep their own colours. */
+.mx-summary a:not([class]) {
+  color: var(--link);
+}
+
+.mx-summary a:hover {
+  text-decoration: none;
+}
+
+.mx-summary :focus-visible {
+  outline: 2px solid var(--mariox);
+  outline-offset: 2px;
+}
+
+.mx-summary .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.mx-summary .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

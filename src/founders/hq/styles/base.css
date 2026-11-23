@@ -1,0 +1,8 @@
+/* Founders HQ page styles, scoped so they only apply while the HQ is on screen (it shares the app with other portals).
+   :where() keeps the scope at zero specificity, so component classes (e.g. a link styled as a button) still win, as before. */
+.hq-root, .hq-root *, .hq-root *::before, .hq-root *::after { box-sizing: border-box; }
+html:has(.hq-root), body:has(.hq-root) { margin: 0; background: oklch(0.982 0.004 85); }
+body:has(.hq-root) { font-family: 'Instrument Sans', system-ui, sans-serif; color: oklch(0.23 0.015 265); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+:where(.hq-root) a { color: var(--acc, oklch(0.5 0.17 265)); text-decoration: none; }
+:where(.hq-root) a:hover { text-decoration: underline; color: var(--acc2, oklch(0.42 0.17 265)); }
+:where(.hq-root) :is(input, select, textarea, button) { font-family: inherit; color: inherit; }

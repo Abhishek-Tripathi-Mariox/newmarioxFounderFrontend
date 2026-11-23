@@ -1,0 +1,255 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: oklch(0.2 0.02 265 / 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  color: oklch(0.23 0.015 265);
+}
+.dialog {
+  width: 100%;
+  max-width: 620px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 24px 60px -20px oklch(0.2 0.02 265 / 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  outline: none;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: oklch(0.5 0.012 265);
+}
+.close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: oklch(0.5 0.012 265);
+  cursor: pointer;
+}
+.close:hover {
+  background: oklch(0.96 0.004 85);
+}
+
+.message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+.good {
+  background: oklch(0.95 0.04 150);
+  color: oklch(0.38 0.1 150);
+}
+.bad {
+  background: oklch(0.95 0.035 25);
+  color: oklch(0.46 0.17 25);
+}
+.info {
+  background: oklch(0.95 0.03 240);
+  color: oklch(0.42 0.11 240);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid oklch(0.92 0.006 85);
+  border-radius: 12px;
+}
+.row {
+  padding: 14px;
+  border-top: 1px solid oklch(0.94 0.005 85);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.row:first-child {
+  border-top: 0;
+}
+.person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.personText {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.name {
+  font-size: 14.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.you {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: oklch(0.95 0.03 265);
+  color: oklch(0.42 0.15 265);
+}
+.meta {
+  font-size: 13px;
+  color: oklch(0.5 0.012 265);
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.secondary,
+.danger,
+.primary {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.secondary {
+  border: 1px solid oklch(0.88 0.008 85);
+  background: #fff;
+  color: oklch(0.23 0.015 265);
+}
+.secondary:hover {
+  background: oklch(0.97 0.004 85);
+}
+.danger {
+  border: 1px solid oklch(0.88 0.04 25);
+  background: #fff;
+  color: oklch(0.5 0.19 25);
+}
+.danger:hover {
+  background: oklch(0.97 0.02 25);
+}
+.primary {
+  border: 0;
+  background: var(--acc, oklch(0.5 0.17 265));
+  color: #fff;
+  font-weight: 600;
+}
+.primary:disabled {
+  opacity: 0.7;
+}
+
+.inlineForm,
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inlineRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.addForm {
+  padding: 16px;
+  border-radius: 12px;
+  background: oklch(0.98 0.004 85);
+  border: 1px solid oklch(0.92 0.006 85);
+}
+.formTitle {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.input {
+  height: 44px;
+  border: 1px solid oklch(0.86 0.008 85);
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 14.5px;
+  font-weight: 400;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--acc, oklch(0.5 0.17 265));
+  box-shadow: 0 0 0 3px oklch(0.5 0.17 265 / 0.15);
+}
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.addButton {
+  min-height: 44px;
+  border: 1px dashed oklch(0.8 0.02 265);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--acc, oklch(0.5 0.17 265));
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.addButton:hover {
+  background: oklch(0.985 0.008 265);
+}
+.footnote {
+  margin: 0;
+  font-size: 12.5px;
+  color: oklch(0.5 0.012 265);
+}

@@ -1,0 +1,72 @@
+/*
+ * Founders HQ on tablets and phones. The prototype shell is built with inline styles, so these rules
+ * use !important to override them, and only inside the media query: the desktop layout is unchanged.
+ */
+.hq-menu-btn,
+.hq-scrim,
+.hq-search-icon { display: none; }
+
+@media (max-width: 900px) {
+  /* Sidebar slides in from the left over the page. */
+  .hq-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .hq-shell[data-nav-open] .hq-sidebar {
+    transform: none;
+    box-shadow: 0 0 40px oklch(0.2 0.02 265 / 0.35);
+  }
+  .hq-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: oklch(0.2 0.02 265 / 0.35);
+  }
+
+  .hq-menu-btn {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: 1px solid oklch(0.9 0.006 85);
+    border-radius: 8px;
+    background: #fff;
+    color: oklch(0.3 0.015 265);
+    cursor: pointer;
+  }
+
+  /* Top bar: menu button + current page; the "Founders HQ /" prefix makes room. */
+  .hq-topbar { padding: 0 14px !important; }
+  .hq-crumbs { min-width: 0; white-space: nowrap; }
+  .hq-crumb-root,
+  .hq-crumb-root + span { display: none; }
+  .hq-crumbs > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+
+  .hq-content { padding: 16px 14px 40px !important; }
+  .hq-search-btn { white-space: nowrap; }
+}
+
+/* Phones: keep the page name readable; the date and the Ctrl K hint give way. */
+@media (max-width: 600px) {
+  .hq-today,
+  .hq-search-kbd,
+  .hq-search-text { display: none !important; }
+  /* Search becomes a square icon button, the same size as the menu button. */
+  .hq-search-icon { display: block; }
+  .hq-search-btn {
+    width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    flex-shrink: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hq-sidebar { transition: none; }
+}
