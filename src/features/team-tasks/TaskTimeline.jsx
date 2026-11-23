@@ -6,16 +6,21 @@ import { dateTime, ago } from '@/lib/date';
 import { companyList, companyOf } from './companies';
 import s from './TaskTimeline.module.css';
 
-const ICON = { created: '＋', status: '●', note: '✎', comment: '💬', attach: '📎', detach: '🗑', edit: '✏', assign: '⇄' };
+const ICON = { created: '＋', status: '●', 'shift-report': '⏱', note: '✎', comment: '💬', attach: '📎', detach: '🗑', edit: '✏', assign: '⇄' };
 
 /** One line of the timeline: who did what. `coName` labels company ids. */
 function describe(e, coName) {
   switch (e.kind) {
     case 'created': return <>gave this task to <b>{e.to}</b></>;
     case 'status':
+      if (e.meta && e.meta.via === 'shift-report') {
+        return <>completed it in the end-of-shift report · <b>{e.from}</b> → <b>{e.to}</b>{e.meta.hours ? <> · {e.meta.hours}h</> : null}</>;
+      }
       return e.meta && e.meta.reopened
         ? <>reopened it · <b>{e.from}</b> → <b>{e.to}</b></>
         : <>changed status <b>{e.from}</b> → <b>{e.to}</b></>;
+    case 'shift-report':
+      return <>reported work in the end-of-shift report{e.meta && e.meta.hours ? <> · <b>{e.meta.hours}h</b></> : null}</>;
     case 'note': return <>updated the progress note</>;
     case 'comment': return <>commented</>;
     case 'attach': {

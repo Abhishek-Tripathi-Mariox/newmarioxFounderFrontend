@@ -8,7 +8,7 @@ import {
   resolveRange, workdays, withTeams, isLate, isExpectedDay, LATE_MS, EVL, SEG, HOUR_MS,
   RANGE_TITLES, statusColors, workedColor, reportLines, indexById, dayShort, dayLong,
 } from './shared/attendanceUtils';
-import { internalOn, internalEntries } from './shared/internalWork';
+import { internalOn, internalEntries, teamTasksOn } from './shared/internalWork';
 
 export const ATT_DEFAULTS = { range: 'today', date: '', team: '', q: '', person: '', exp: '' };
 export const ATT_TEAMS = ['Sales'].concat(TEAMS);
@@ -33,7 +33,7 @@ function dayRow(p, d, label, sub, ctx) {
   const internal = internalOn(reports, p.id, d);
   const tone = statusColors(st[1]);
   return {
-    key, person: p, label, sub,
+    key, person: p, label, sub, today: d === T,
     status: st[0], sBg: tone.bg, sFg: tone.fg,
     present: list.length > 0, late, work: s.work,
     inL: s.first ? clock(s.first) : '—',
@@ -53,6 +53,7 @@ function dayRow(p, d, label, sub, ctx) {
     open: exp === key,
     rep,
     internal,
+    teamTasks: teamTasksOn(reports, p.id, d),
     intH: internal.reduce((x, e) => x + e.h, 0),
     events: list.map((e, i) => ({ key: i, time: clock(e.t), text: EVL[e.k][0], dot: `oklch(0.62 0.14 ${EVL[e.k][1]})` })),
   };

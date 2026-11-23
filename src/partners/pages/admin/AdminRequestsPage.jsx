@@ -23,7 +23,7 @@ export default function AdminRequestsPage() {
   };
   return (
     <>
-      <PageHeader eyebrow="Admin" title="Partner requests" subtitle="Click a row to approve, assign, reschedule or reply." />
+      <PageHeader eyebrow="Admin" title="Partner requests" subtitle="Scope approvals, office visits, tech requests and support tickets from partners." />
       <div><Tabs tabs={KINDS.map(k => ({ value: k, label: REQUESTS[k].title }))} value={kind} onChange={switchKind} /></div>
       {initial && <RequestsView key={kind} kind={kind} admin embedded initialStatus={initial.status} />}
     </>

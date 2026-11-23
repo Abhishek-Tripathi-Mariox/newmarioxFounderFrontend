@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStore } from '@/store';
 import { useProjectsModel } from '@/hooks/useProjectsModel';
 import { Button, DataTable, Pagination, SegmentedControl, usePagination } from '@/components/ui';
-import { INK, projectColor } from '@/lib/color';
+import { INK, RED, projectColor } from '@/lib/color';
 import { dLabel } from '@/lib/date';
 import { hh } from '@/lib/format';
 import { MiniAvatar } from '../components/TaskCard';
@@ -24,7 +24,7 @@ export default function TimesheetsTab() {
   const delLog = useStore((st) => st.delLog);
   const exportTimesheets = useStore((st) => st.exportTimesheets);
   const flash = useStore((st) => st.flash);
-  const { LF, inR, pF, memF, g, hk, MEM, PRJ, MSS, periodLabel } = useProjectsModel();
+  const { LF, inR, pF, memF, g, hk, MEM, PRJ, MSS, info, periodLabel } = useProjectsModel();
   const view = ['matrix', 'internal'].includes(pj.tsView) ? pj.tsView : 'entries';
   const reports = useScoped().reports;
 
@@ -56,10 +56,20 @@ export default function TimesheetsTab() {
       return { m, proj, int, total: proj + int, cells: cols.map((p) => ({ p, v: cell(m, p) })) };
     });
     const totals = cols.map((p) => mems.reduce((x, m) => x + cell(m, p), 0));
+    // Hours budget per project and hours assigned per member (all time), to flag overruns in red.
+    const budgets = cols.map((p) => {
+      const { budget, used } = info(p);
+      return { budget: budget > 0 ? budget : 0, used, over: budget > 0 && used > budget + 1e-9 };
+    });
+    rows.forEach((row) => row.cells.forEach((c) => {
+      const assigned = +((c.p.alloc || {})[row.m.id]) || 0;
+      const used = g(`pm:${c.p.id}:${row.m.id}`).all;
+      Object.assign(c, { assigned, used, over: assigned > 0 && used > assigned + 1e-9 });
+    }));
     const projGrand = totals.reduce((a, b) => a + b, 0);
     const intGrand = rows.reduce((x, r) => x + r.int, 0);
-    return { cols, rows, totals, projGrand, intGrand, grand: projGrand + intGrand, max };
-  }, [pF, memF, g, hk, intRows]);
+    return { cols, rows, totals, budgets, projGrand, intGrand, grand: projGrand + intGrand, max };
+  }, [pF, memF, g, hk, intRows, info]);
 
   const openP = (id) => setPj({ selP: id, selM: null, exp: null, exp2: null, pDay: null });
   const openM = (id) => setPj({ selM: id, selP: null, mDay: null, exp: null, exp2: null });
@@ -159,11 +169,23 @@ export default function TimesheetsTab() {
               <thead>
                 <tr>
                   <th className={s.stickyHead}>Member</th>
-                  {mx.cols.map((p) => (
-                    <th key={p.id} className={s.mxTh}>
-                      <div className={s.mxThInner}><span className={s.sq} style={{ background: projectColor(p) }} /><span className={s.nowrap}>{p.name}</span></div>
-                    </th>
-                  ))}
+                  {mx.cols.map((p, i) => {
+                    const b = mx.budgets[i];
+                    return (
+                      <th
+                        key={p.id}
+                        className={s.mxTh}
+                        title={b.budget ? `${p.name}: ${hh(b.used)} used of ${hh(b.budget)} budget (all time)${b.over ? ` · ${hh(b.used - b.budget)} over` : ''}` : `${p.name}: no hours budget set`}
+                        style={b.over ? { color: RED } : undefined}
+                      >
+                        <div className={s.mxThInner}>
+                          <span className={s.sq} style={{ background: b.over ? RED : projectColor(p) }} />
+                          <span className={s.nowrap}>{p.name}</span>
+                          {b.budget > 0 && <span className={s.nowrap} style={{ fontWeight: 600, color: b.over ? RED : 'var(--muted)' }}>[{hh(b.budget)}]</span>}
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className={`${s.mxTh} ${s.right}`} title="Internal (non-project) work from end-of-shift reports">
                     <div className={s.mxThInner} style={{ justifyContent: 'flex-end' }}><span className={s.sq} style={{ background: INT_HUE }} /><span className={s.nowrap}>Internal work</span></div>
                   </th>
@@ -178,22 +200,26 @@ export default function TimesheetsTab() {
                       <td className={s.sticky} style={{ padding: '8px 14px' }}>
                         <button type="button" className={s.linkBtn} onClick={() => openM(r.m.id)}><MiniAvatar av={av} /><span className={s.b500}>{av.name}</span></button>
                       </td>
-                      {r.cells.map(({ p, v }) => {
+                      {r.cells.map(({ p, v, assigned, used, over }) => {
                         const ratio = mx.max ? v / mx.max : 0;
+                        const tip = `${r.m.name} on ${p.name}: ${hh(v)}`
+                          + (assigned ? ` · ${hh(used)} logged of ${hh(assigned)} assigned (all time)${over ? ` · ${hh(used - assigned)} over` : ''}` : '');
                         return (
                           <td key={p.id} className={s.mxTd}>
                             <button
                               type="button"
                               className={s.mxCell}
-                              title={`${r.m.name} on ${p.name}: ${hh(v)}`}
+                              title={tip}
                               onClick={() => drill(r.m.id, p.id)}
                               style={{
                                 fontWeight: v ? 600 : 400,
-                                background: v ? `oklch(0.6 0.15 265 / ${(0.07 + ratio * 0.38).toFixed(2)})` : 'transparent',
-                                color: v ? INK : 'oklch(0.75 0.01 265)',
+                                background: over ? 'oklch(0.94 0.05 25)' : v ? `oklch(0.6 0.15 265 / ${(0.07 + ratio * 0.38).toFixed(2)})` : 'transparent',
+                                color: over ? RED : v ? INK : 'oklch(0.75 0.01 265)',
+                                boxShadow: over ? `inset 0 0 0 1px ${RED}` : undefined,
                               }}
                             >
                               {v ? hh(v) : '·'}
+                              {assigned > 0 && <span style={{ marginLeft: 4, fontWeight: 500, color: over ? RED : 'var(--muted)' }}>[{hh(assigned)}]</span>}
                             </button>
                           </td>
                         );
@@ -219,7 +245,15 @@ export default function TimesheetsTab() {
                 })}
                 <tr className={s.totalRow}>
                   <td className={s.stickyHead}>Total</td>
-                  {mx.totals.map((t, i) => <td key={mx.cols[i].id}>{hh(t)}</td>)}
+                  {mx.totals.map((t, i) => {
+                    const b = mx.budgets[i];
+                    return (
+                      <td key={mx.cols[i].id} style={b.over ? { color: RED } : undefined} title={b.budget ? `${hh(b.used)} used of ${hh(b.budget)} budget (all time)` : undefined}>
+                        {hh(t)}
+                        {b.budget > 0 && <span style={{ marginLeft: 4, fontWeight: 500, color: b.over ? RED : 'var(--muted)' }}>/ {hh(b.budget)}</span>}
+                      </td>
+                    );
+                  })}
                   <td>{hh(mx.intGrand)}</td>
                   <td style={{ fontWeight: 700 }}>{hh(mx.grand)}</td>
                 </tr>
@@ -229,7 +263,7 @@ export default function TimesheetsTab() {
             {mx.rows.length === 0 && <div className={s.empty}>No hours logged for these filters.</div>}
             <Pagination {...mxPager} label="members" />
           </div>
-          <div className={s.hint}>Click any cell to see the entries behind it. Internal work comes from end-of-shift reports; Total = project hours + internal work.</div>
+          <div className={s.hint}>Click any cell to see the entries behind it. [h] next to a project = its hours budget; [h] in a cell = hours assigned to that member. Red = more hours logged than budgeted or assigned (all time). Internal work comes from end-of-shift reports; Total = project hours + internal work.</div>
         </>
       )}
     </div>

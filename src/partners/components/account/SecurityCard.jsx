@@ -4,7 +4,6 @@ import { useForm } from '@/partners/hooks/useForm';
 import { api } from '@/partners/api';
 import { date } from '@/partners/lib/format';
 
-import { ThemeSwitch } from './ThemeSwitch';
 
 const LEVELS = [
   { label: 'Too short', tone: 'var(--bad)' },
@@ -82,14 +81,6 @@ export function SessionsCard({ user }) {
         <p className="sub" style={{ fontSize: 14 }}>Lost a phone or used a shared computer? Sign out everywhere except this browser.</p>
         <div><Button icon="refresh" loading={busy} onClick={signOutOthers}>Sign out other devices</Button></div>
       </div>
-    </Card>
-  );
-}
-
-export function AppearanceCard() {
-  return (
-    <Card title="Appearance" subtitle="Saved in this browser.">
-      <div style={{ maxWidth: 360, marginInline: -6 }}><ThemeSwitch /></div>
     </Card>
   );
 }

@@ -4,6 +4,10 @@ import { initialsOf } from '@/founders/auth/accounts';
 import {
   KEY,
   PEOPLE,
+  memberOpts,
+  othersOf,
+  personOf,
+  ALL_FOUNDERS,
   GEN,
   coOf,
   CO_OPTS,
@@ -15,6 +19,7 @@ import {
   fmtSize,
   STATUS,
   STAGES,
+  iso,
   plus,
   dayDiff,
   uid,
@@ -27,6 +32,7 @@ import {
   CSTAGES,
   CST,
   STG,
+  goalCalc,
   DOC_TPL,
   FTYPES,
   ftypeOf,
@@ -36,13 +42,121 @@ import {
 
 export default class HQTasksHiringDocs extends HQAssistant {
   /**
-   * View model for the Hiring and Docs pages: `hr`/`pk` (hiring board + role panel) and `dc` (docs and
-   * files), plus the shared popover and toast. (Tasks are team tasks: see teamTasks/ and TasksHub.)
+   * View model for the My tasks, Hiring and Docs pages: `tk`/`tp` (the founders' own task list + task
+   * page, data.tasks), `hr`/`pk` (hiring board + role panel) and `dc` (docs and files), plus the shared
+   * popover and toast. (HQ's Team tasks come from the internal portal: see teamTasks/ and TasksHub.)
    */
   tasksHiringDocsViewModel() {
-    const { me, data, pop } = this.state;
+    const { me, data, tf: taskFilter, pop } = this.state;
+    // My tasks (the founders' own tasks, data.tasks)
     const now = new Date();
-    /** "12 Mar" ("12 Mar 2027" outside the current year); '' when empty. */
+    const freshIds = this.state.fresh,
+      tgroup = this.state.tgroup,
+      tsort = this.state.tsort,
+      tview = this.state.tview;
+    // Popover menus registered while building the view, keyed by popover id; the one matching
+    // `state.pop` is rendered by the view.
+    const menus = {},
+      titles = {};
+    /**
+     * Click handler that toggles popover `popKey` and places it under the clicked element (or above it
+     * when close to the bottom of the window). Coordinates are divided by the app's CSS zoom.
+     */
+    const openAt = popKey => e => {
+      const zoom = this._zoom || 1,
+        rawRect = e.currentTarget.getBoundingClientRect(),
+        rect = { left: rawRect.left / zoom, top: rawRect.top / zoom, bottom: rawRect.bottom / zoom },
+        viewportHeight = window.innerHeight / zoom,
+        openUpward = rect.bottom > viewportHeight - 280;
+      this.setState({
+        pop: this.state.pop === popKey ? null : popKey,
+        popXY: {
+          x: Math.max(8, Math.min(rect.left, window.innerWidth / zoom - 240)),
+          top: openUpward ? 'auto' : rect.bottom + 4 + 'px',
+          bottom: openUpward ? viewportHeight - rect.top + 4 + 'px' : 'auto'
+        }
+      });
+    };
+    const items = (opts, current, onPick) =>
+      opts.map(([value, label, dot, desc]) => ({
+        label,
+        desc: desc || '',
+        hasDesc: !!desc,
+        dot: dot || '',
+        hasDot: !!dot,
+        mark: current === value ? '✓' : '',
+        bg: current === value ? 'oklch(0.97 0.012 265)' : 'transparent',
+        go: () => {
+          this.setState({ pop: null });
+          onPick(value);
+        }
+      }));
+    /** Registers a popover menu and returns the click handler that opens it. */
+    const registerMenu = (menuKey, title, opts, current, onPick) => {
+      menus[menuKey] = items(opts, current, onPick);
+      titles[menuKey] = title;
+      return openAt(menuKey);
+    };
+    const ST_OPTS = [
+      ['Not started', 'Not started', STATUS['Not started'].dot, "Haven't begun yet"],
+      ['In progress', 'In progress', STATUS['In progress'].dot, 'Someone is working on it'],
+      ['Done', 'Done', STATUS['Done'].dot, 'Finished']
+    ];
+    const PRI_DOT = { High: 'oklch(0.6 0.2 25)', Medium: 'oklch(0.75 0.14 70)', Low: 'oklch(0.75 0.01 265)' };
+    const PRI_OPTS = [
+      ['High', 'High', PRI_DOT.High, 'Do this first'],
+      ['Medium', 'Medium', PRI_DOT.Medium],
+      ['Low', 'Low', PRI_DOT.Low, 'When there is time']
+    ];
+    // Every founder / co-founder, then 'both' (All founders).
+    const TEAM_OPTS = memberOpts();
+    const popPosition = this.state.popXY || { x: 0, top: '0px', bottom: 'auto' };
+    const query = (taskFilter.q || '').trim().toLowerCase();
+    // Filtering by one founder also shows the tasks all founders share (owner 'both').
+    const inTeam = task =>
+      taskFilter.owner === 'all' ||
+      task.owner === taskFilter.owner ||
+      (taskFilter.owner !== 'both' && task.owner === 'both');
+    const baseTasks = data.tasks.filter(
+      task =>
+        (taskFilter.co === 'any' || task.co === taskFilter.co) &&
+        inTeam(task) &&
+        (!query || (task.title + ' ' + (task.notes || '')).toLowerCase().includes(query))
+    );
+    const dueMatches = (task, dueFilter) => {
+      const daysLeft = dayDiff(task.due);
+      if (dueFilter === 'overdue') return !task.done && daysLeft !== null && daysLeft < 0;
+      if (dueFilter === 'today') return daysLeft === 0;
+      if (dueFilter === 'week') return daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+      if (dueFilter === 'nodate') return !task.due;
+      return true;
+    };
+    const myId = this.state.me,
+      quickView = taskFilter.qv || 'all';
+    // "<name>'s tasks" for every other founder / co-founder (their own and the shared ones), then "Shared".
+    const personViews = Object.fromEntries(othersOf(myId).map(personId => [
+      'p:' + personId,
+      [personOf(personId).first + "'s tasks", task => task.owner === personId || task.owner === 'both']
+    ]));
+    const QUICK_VIEWS = {
+      all: ['All tasks', () => true],
+      mine: ['My tasks', task => task.owner === myId || task.owner === 'both'],
+      ...personViews,
+      shared: ['Shared', task => task.owner === 'both'],
+      waiting: ['Waiting on others', task => !task.done && !!task.waiting],
+      nodate: ['No due date', task => !task.done && !task.due],
+      recurring: ['Recurring', task => !!task.repeat && task.repeat !== 'none']
+    };
+    // Tasks created in this session stay visible even when they don't match the filters.
+    const visible = baseTasks.filter(
+      task =>
+        freshIds.includes(task.id) ||
+        ((QUICK_VIEWS[quickView] || QUICK_VIEWS.all)[1](task) &&
+          (taskFilter.status === 'any' || task.status === taskFilter.status) &&
+          (taskFilter.pri === 'any' || task.pri === taskFilter.pri) &&
+          (taskFilter.due === 'any' || dueMatches(task, taskFilter.due)))
+    );
+    const setTaskField = (id, field, value) => this.setMyTask(id, field, value);
     const formatDate = isoDate => {
       if (!isoDate) return '';
       const date = new Date(isoDate + 'T00:00:00');
@@ -53,6 +167,862 @@ export default class HQTasksHiringDocs extends HQAssistant {
           : { day: 'numeric', month: 'short', year: 'numeric' }
       );
     };
+    const taskActionOptions = task => [
+      ['open', 'Open task page', '', 'See details, sub-tasks, notes'],
+      ['done', task.done ? 'Mark as not done' : 'Mark as done', STATUS['Done'].dot],
+      ['start', 'Move to In progress', STATUS['In progress'].dot],
+      ['tmr', 'Due tomorrow', '', 'Push the due date to tomorrow'],
+      ['nw', 'Due next week', '', 'Push the due date 7 days'],
+      ['clr', 'Remove due date'],
+      ['dup', 'Duplicate', '', 'Makes a copy with the same details'],
+      ['copy', 'Copy as text', '', 'Paste into WhatsApp, email, Slack'],
+      ['del', 'Delete task', RED, 'You can undo right after']
+    ];
+    // Optional table columns come from the user's preferences.
+    const columnPrefs = this.pf().cols,
+      visibleColumns = { ...columnPrefs, dates: !!(columnPrefs.start || columnPrefs.due) },
+      gridCols = [
+        '24px',
+        '30px',
+        'minmax(240px,1fr)',
+        visibleColumns.status && '136px',
+        visibleColumns.dept && '150px',
+        visibleColumns.co && '108px',
+        visibleColumns.team && '118px',
+        visibleColumns.dates && '170px',
+        visibleColumns.pri && '92px',
+        '40px'
+      ]
+        .filter(Boolean)
+        .join(' ');
+    const selectedIds = this.state.tsel || [],
+      openDatePicker = e => {
+        try {
+          e.currentTarget.showPicker();
+        } catch {
+          /* showPicker() is unsupported in some browsers */
+        }
+      };
+    /** View model for one task row (list view) or card (board view). */
+    const buildTaskRow = task => {
+      const company = coOf(task.co),
+        owner = PEOPLE[task.owner] || PEOPLE.both,
+        status = STATUS[task.status] || STATUS['Not started'],
+        id = task.id,
+        daysLeft = dayDiff(task.due);
+      const overdue = !task.done && daysLeft !== null && daysLeft < 0,
+        soon = !task.done && (daysLeft === 0 || daysLeft === 1);
+      const dueText = !task.due
+        ? 'Add date'
+        : daysLeft === 0
+          ? 'Today'
+          : daysLeft === 1
+            ? 'Tomorrow'
+            : formatDate(task.due) + (overdue ? ' · late' : '');
+      const subs = task.subs || [],
+        linkedGoal = task.goal ? data.goals.find(goal => goal.id === task.goal) : null;
+      const isSel = selectedIds.includes(id),
+        hasRepeat = !!task.repeat && task.repeat !== 'none';
+      return {
+        cs: visibleColumns,
+        gridCols,
+        id,
+        title: task.title,
+        pick: openDatePicker,
+        selMark: isSel ? '✓' : '',
+        selBg: isSel ? 'oklch(0.5 0.17 265)' : '#fff',
+        selBd: isSel ? 'oklch(0.5 0.17 265)' : 'oklch(0.82 0.01 265)',
+        selOp: isSel || selectedIds.length ? '1' : '0.4',
+        selToggle: () =>
+          this.setState({
+            tsel: isSel ? selectedIds.filter(selected => selected !== id) : [...selectedIds, id]
+          }),
+        rowBg: isSel ? 'oklch(0.97 0.015 265)' : overdue ? 'oklch(0.985 0.012 25)' : 'transparent',
+        rowEdge: overdue ? 'inset 3px 0 0 oklch(0.6 0.19 25)' : 'none',
+        hasMeta: (!task.done && !!task.waiting) || hasRepeat || !!linkedGoal || !!subs.length,
+        repeatShort: { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[task.repeat] || '',
+        showStart: !!visibleColumns.start && !!task.start,
+        dueShow: !task.due
+          ? '—'
+          : daysLeft === 0
+            ? 'Today'
+            : daysLeft === 1
+              ? 'Tomorrow'
+              : formatDate(task.due) + (overdue ? ' · ' + -daysLeft + 'd late' : ''),
+        titleOr: task.title || 'Untitled task',
+        hasSub: !!subs.length,
+        hasWait: !task.done && !!task.waiting,
+        waitLabel: 'Waiting: ' + ((PEOPLE[task.waiting] || {}).first || ''),
+        hasRepeat: !!task.repeat && task.repeat !== 'none',
+        repeatLabel: 'Repeats ' + (task.repeat || ''),
+        hasGoal: !!linkedGoal,
+        goalLabel: linkedGoal ? 'Goal: ' + (linkedGoal.title || 'Untitled') : '',
+        goalShort: linkedGoal ? linkedGoal.title || 'Goal' : '',
+        subInfo: subs.filter(sub => sub.done).length + '/' + subs.length,
+        deco: task.done ? 'line-through' : 'none',
+        titleColor: task.done ? MUTED : 'oklch(0.23 0.015 265)',
+        mark: task.done ? '✓' : '',
+        checkBg: task.done ? 'oklch(0.55 0.14 150)' : '#fff',
+        checkBorder: task.done ? 'oklch(0.55 0.14 150)' : 'oklch(0.75 0.01 265)',
+        checkTip: task.done ? 'Mark as not done' : 'Mark as done',
+        toggle: () => setTaskField(id, 'status', task.done ? 'Not started' : 'Done'),
+        onTitle: e => setTaskField(id, 'title', e.target.value),
+        onKey: e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.newMyTask({ status: task.status, co: task.co, owner: task.owner });
+          }
+        },
+        openTask: () => this.setState({ tpeek: id, pop: null }),
+        actions: registerMenu('ra:' + id, 'Task actions', taskActionOptions(task), '', value =>
+          this.myTaskAct(id, value)
+        ),
+        st: {
+          label: task.status,
+          tint: status.tint,
+          ink: status.ink,
+          dot: status.dot,
+          bd: status.bd,
+          toggle: registerMenu('st:' + id, 'Status', ST_OPTS, task.status, value =>
+            setTaskField(id, 'status', value)
+          )
+        },
+        dp: (() => {
+          const deptKey = task.dept || (task.co === 'all' ? 'founder' : ''),
+            dept = DEPT_OF[deptKey];
+          return {
+            label: dept ? dept.label : 'Set department',
+            tint: dept ? dept.tint : 'oklch(0.97 0.003 265)',
+            ink: dept ? dept.ink : 'oklch(0.6 0.01 265)',
+            synced: !!dept && deptKey !== 'founder' && task.co === 'mariox',
+            tip:
+              dept && deptKey !== 'founder' && task.co === 'mariox'
+                ? 'Shows in the Mariox portal for ' +
+                  dept.label +
+                  (task.extBy ? ' · last updated there by ' + task.extBy : '')
+                : 'Change department',
+            toggle: registerMenu(
+              'dp:' + id,
+              'Department',
+              DEPTS.map(([value, label, hue]) => [value, label, 'oklch(0.62 0.13 ' + hue + ')']),
+              deptKey,
+              value => setTaskField(id, 'dept', value)
+            )
+          };
+        })(),
+        co: {
+          label: company.name,
+          tint: company.tint,
+          ink: company.ink,
+          toggle: registerMenu(
+            'co:' + id,
+            'Company',
+            CO_OPTS.map(([value, label]) => [value, label, coOf(value).bg || 'oklch(0.6 0.01 265)']),
+            task.co,
+            value => setTaskField(id, 'co', value)
+          )
+        },
+        own: {
+          label: owner.first,
+          ini: owner.ini,
+          bg: owner.bg,
+          toggle: registerMenu('ow:' + id, "Who's doing it", TEAM_OPTS, task.owner, value =>
+            setTaskField(id, 'owner', value)
+          )
+        },
+        pr: {
+          label: task.pri,
+          dot: PRI_DOT[task.pri] || PRI_DOT.Medium,
+          toggle: registerMenu('pr:' + id, 'Priority', PRI_OPTS, task.pri, value =>
+            setTaskField(id, 'pri', value)
+          )
+        },
+        start: task.start || '',
+        onStart: e => setTaskField(id, 'start', e.target.value),
+        startText: task.start ? formatDate(task.start) : 'Add date',
+        startColor: task.start ? 'oklch(0.3 0.012 265)' : 'oklch(0.72 0.01 265)',
+        startWeight: '400',
+        due: task.due || '',
+        onDue: e => setTaskField(id, 'due', e.target.value),
+        dueText,
+        dueCard: task.due
+          ? 'Due ' + (daysLeft === 0 ? 'today' : daysLeft === 1 ? 'tomorrow' : formatDate(task.due))
+          : 'No due date',
+        dueColor: overdue
+          ? RED
+          : soon
+            ? 'oklch(0.5 0.13 60)'
+            : task.due
+              ? 'oklch(0.3 0.012 265)'
+              : 'oklch(0.72 0.01 265)',
+        dueWeight: overdue || soon ? '600' : '400'
+      };
+    };
+    const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+    const compareTasks =
+      {
+        due: (a, b) => (a.due || '9999').localeCompare(b.due || '9999'),
+        start: (a, b) => (a.start || '9999').localeCompare(b.start || '9999'),
+        priority: (a, b) =>
+          (PRIORITY_RANK[a.pri] ?? 1) - (PRIORITY_RANK[b.pri] ?? 1) ||
+          (a.due || '9999').localeCompare(b.due || '9999'),
+        name: (a, b) => (a.title || '').localeCompare(b.title || ''),
+        newest: (a, b) => (b.created || 0) - (a.created || 0)
+      }[tsort] || (() => 0);
+    // Tasks created in this session stay on top in creation order; the rest use the chosen sort.
+    const orderTasks = (a, b) => {
+      const freshA = freshIds.indexOf(a.id),
+        freshB = freshIds.indexOf(b.id);
+      if (freshA > -1 || freshB > -1) return (freshA < 0 ? 1e9 : freshA) - (freshB < 0 ? 1e9 : freshB);
+      return compareTasks(a, b);
+    };
+    // How the task list is grouped (state.tgroup).
+    const groupDef =
+      {
+        status: {
+          field: 'status',
+          opts: ['In progress', 'Not started', 'Done'].map(value => [value, value, STATUS[value].dot]),
+          keepEmpty: true
+        },
+        company: {
+          field: 'co',
+          opts: CO_OPTS.map(([value, label]) => [value, label, coOf(value).bg || 'oklch(0.6 0.01 265)'])
+        },
+        owner: { field: 'owner', opts: TEAM_OPTS },
+        priority: {
+          field: 'pri',
+          opts: PRI_OPTS.map(([value, label, dot]) => [value, label, dot]),
+          keepEmpty: false
+        },
+        none: { field: null, opts: [['all', 'All tasks', 'oklch(0.6 0.01 265)']], keepEmpty: true }
+      }[tgroup] || null;
+    const collapsedGroups = this.state.gcol;
+    // Empty groups are only kept when no filter is active (and always on the board).
+    const groups = groupDef.opts
+      .map(([value, label, dot]) => {
+        const groupTasks = visible
+            .filter(task => !groupDef.field || task[groupDef.field] === value)
+            .sort(orderTasks),
+          groupKey = tgroup + ':' + value;
+        const forced = groupDef.field === 'status' && taskFilter.status === value;
+        const isOpen = forced || !collapsedGroups[groupKey];
+        return {
+          label,
+          dot,
+          count: groupTasks.length + (groupTasks.length === 1 ? ' task' : ' tasks'),
+          open: isOpen,
+          caret: isOpen ? '▼' : '▶',
+          empty: !groupTasks.length,
+          n: groupTasks.length,
+          toggle: () =>
+            this.setState({ gcol: { ...collapsedGroups, [groupKey]: !collapsedGroups[groupKey] } }),
+          add: () => this.newMyTask(groupDef.field ? { [groupDef.field]: value } : {}),
+          rows: groupTasks.map(buildTaskRow)
+        };
+      })
+      .filter(
+        group =>
+          group.n ||
+          tview === 'board' ||
+          (groupDef.keepEmpty &&
+            !(
+              taskFilter.owner !== 'all' ||
+              taskFilter.status !== 'any' ||
+              taskFilter.pri !== 'any' ||
+              taskFilter.due !== 'any' ||
+              (taskFilter.q || '').trim() ||
+              taskFilter.co !== 'any'
+            ))
+      );
+    const openTasks = baseTasks.filter(task => !task.done);
+    // Summary tiles: [filter value, label, dot colour, count, filter key, tooltip].
+    const tileDef = [
+      [
+        'overdue',
+        'Overdue',
+        RED,
+        openTasks.filter(task => dueMatches(task, 'overdue')).length,
+        'due',
+        'Open tasks past their due date'
+      ],
+      [
+        'today',
+        'Due today',
+        'oklch(0.72 0.15 65)',
+        openTasks.filter(task => dueMatches(task, 'today')).length,
+        'due',
+        'Open tasks due today'
+      ],
+      [
+        'week',
+        'Due in 7 days',
+        'oklch(0.6 0.13 265)',
+        openTasks.filter(task => dueMatches(task, 'week')).length,
+        'due',
+        'Open tasks due in the next 7 days'
+      ],
+      [
+        'In progress',
+        'In progress',
+        STATUS['In progress'].dot,
+        baseTasks.filter(task => task.status === 'In progress').length,
+        'status',
+        'Tasks someone is working on'
+      ],
+      [
+        'Done',
+        'Done this week',
+        STATUS['Done'].dot,
+        baseTasks.filter(
+          task => task.status === 'Done' && task.doneAt && Date.now() - task.doneAt < 7 * 864e5
+        ).length,
+        'status',
+        'Tasks finished in the last 7 days (click to see all done)'
+      ]
+    ];
+    const tiles = tileDef.map(([value, label, dot, count, key, tip]) => {
+      const isActive = taskFilter[key] === value;
+      return {
+        label,
+        dot,
+        n: String(count),
+        tip: tip + (isActive ? ' (click again to clear)' : ''),
+        color: value === 'overdue' && count ? RED : 'oklch(0.23 0.015 265)',
+        bg: isActive ? 'oklch(0.97 0.015 265)' : '#fff',
+        bd: isActive ? 'oklch(0.55 0.15 265)' : 'oklch(0.915 0.006 85)',
+        go: () =>
+          this.setState({
+            tf: {
+              ...taskFilter,
+              [key]: isActive ? 'any' : value,
+              ...(key === 'due' && !isActive && taskFilter.status === 'Done' ? { status: 'any' } : {}),
+              ...(key === 'status' && !isActive ? { due: 'any' } : {})
+            },
+            fresh: []
+          })
+      };
+    });
+    /** Filter chip that opens a menu and writes the picked value into `state.tf`. */
+    const filterButton = (menuKey, name, current, anyVal, opts, label) => {
+      const isActive = current !== anyVal;
+      return {
+        label: isActive ? name + ': ' + label : name,
+        bg: isActive ? 'oklch(0.96 0.025 265)' : '#fff',
+        bd: isActive ? 'oklch(0.8 0.06 265)' : 'oklch(0.9 0.006 85)',
+        fg: isActive ? 'oklch(0.38 0.14 265)' : 'oklch(0.35 0.012 265)',
+        go: registerMenu(menuKey, name, opts, current, value =>
+          this.setState({ tf: { ...this.state.tf, [menuKey.slice(2)]: value }, fresh: [] })
+        )
+      };
+    };
+    const teamOpts = [
+      ['all', 'Everyone', '', 'All tasks'],
+      ...memberOpts(false).map(option => [...option, 'Includes shared tasks']),
+      ['both', ALL_FOUNDERS, PEOPLE.both.bg, 'Shared tasks only']
+    ];
+    const dueOpts = [
+      ['any', 'Any time'],
+      ['overdue', 'Overdue', RED],
+      ['today', 'Due today', 'oklch(0.72 0.15 65)'],
+      ['week', 'Due in next 7 days', 'oklch(0.6 0.13 265)'],
+      ['nodate', 'No due date', 'oklch(0.8 0.01 265)']
+    ];
+    const labelOf = (opts, value) => (opts.find(option => option[0] === value) || [undefined, ''])[1];
+    const filters = [
+      filterButton('f:owner', 'Team', taskFilter.owner, 'all', teamOpts, labelOf(teamOpts, taskFilter.owner)),
+      filterButton(
+        'f:status',
+        'Status',
+        taskFilter.status,
+        'any',
+        [['any', 'Any status'], ...ST_OPTS],
+        taskFilter.status
+      ),
+      filterButton(
+        'f:pri',
+        'Priority',
+        taskFilter.pri,
+        'any',
+        [['any', 'Any priority'], ...PRI_OPTS],
+        taskFilter.pri
+      ),
+      filterButton('f:due', 'Due', taskFilter.due, 'any', dueOpts, labelOf(dueOpts, taskFilter.due))
+    ];
+    const GROUPS = [
+      ['status', 'Status'],
+      ['company', 'Company'],
+      ['owner', 'Team'],
+      ['priority', 'Priority'],
+      ['none', 'No grouping']
+    ];
+    const SORTS = [
+      ['due', 'Due date (soonest first)'],
+      ['start', 'Start date'],
+      ['priority', 'Priority (high first)'],
+      ['name', 'Name (A to Z)'],
+      ['newest', 'Newest first']
+    ];
+    // View preferences are remembered per browser.
+    const setViewPref = (prefKey, value) => {
+      localStorage.setItem(KEY + '-' + prefKey, value);
+      this.setState({ [prefKey]: value });
+    };
+    const viewOpts = [
+      {
+        label: 'Group by: ' + labelOf(GROUPS, tgroup),
+        bg: '#fff',
+        bd: 'oklch(0.9 0.006 85)',
+        fg: 'oklch(0.35 0.012 265)',
+        go: registerMenu('v:group', 'Group tasks by', GROUPS, tgroup, value => setViewPref('tgroup', value))
+      },
+      {
+        label: 'Sort: ' + labelOf(SORTS, tsort).replace(/ \(.*\)/, ''),
+        bg: '#fff',
+        bd: 'oklch(0.9 0.006 85)',
+        fg: 'oklch(0.35 0.012 265)',
+        go: registerMenu('v:sort', 'Sort tasks by', SORTS, tsort, value => setViewPref('tsort', value))
+      }
+    ];
+    const anyFilter =
+      (taskFilter.qv && taskFilter.qv !== 'all') ||
+      taskFilter.owner !== 'all' ||
+      taskFilter.status !== 'any' ||
+      taskFilter.pri !== 'any' ||
+      taskFilter.due !== 'any' ||
+      !!query;
+    const openTasksAllCompanies = data.tasks.filter(task => !task.done && inTeam(task));
+    const tasksView = {
+      sub:
+        openTasks.length +
+        ' open · ' +
+        openTasks.filter(task => dueMatches(task, 'overdue')).length +
+        ' overdue',
+      add: () => this.newMyTask({}),
+      groups,
+      tiles,
+      filters,
+      viewOpts,
+      anyFilter,
+      cs: visibleColumns,
+      gridCols,
+      empty: !visible.length && anyFilter,
+      isList: tview !== 'board',
+      isBoard: tview === 'board',
+      viewSeg: segOf(
+        [
+          ['list', 'List'],
+          ['board', 'Board']
+        ],
+        tview,
+        value => setViewPref('tview', value)
+      ),
+      q: taskFilter.q || '',
+      onQ: e => this.setState({ tf: { ...this.state.tf, q: e.target.value } }),
+      clear: () =>
+        this.setState({
+          tf: { ...taskFilter, owner: 'all', status: 'any', pri: 'any', due: 'any', q: '', qv: 'all' },
+          fresh: []
+        }),
+      quick: Object.keys(QUICK_VIEWS).map(viewKey => {
+        const isActive = quickView === viewKey,
+          count = baseTasks.filter(
+            task =>
+              (viewKey === 'all' || viewKey === 'recurring' || viewKey === 'mine' || viewKey === 'other'
+                ? !task.done
+                : true) && QUICK_VIEWS[viewKey][1](task)
+          ).length;
+        return {
+          label: QUICK_VIEWS[viewKey][0],
+          n: String(count),
+          bg: isActive ? 'oklch(0.23 0.015 265)' : '#fff',
+          fg: isActive ? '#fff' : 'oklch(0.35 0.012 265)',
+          bd: isActive ? 'oklch(0.23 0.015 265)' : 'oklch(0.9 0.006 85)',
+          go: () => this.setState({ tf: { ...this.state.tf, qv: viewKey }, fresh: [], tsel: [] })
+        };
+      }),
+      hasSel: !!selectedIds.length,
+      selN: selectedIds.length + ' selected',
+      selClear: () => this.setState({ tsel: [] }),
+      allMark:
+        selectedIds.length && selectedIds.length >= visible.length ? '✓' : selectedIds.length ? '–' : '',
+      allBg: selectedIds.length ? 'oklch(0.5 0.17 265)' : '#fff',
+      allBd: selectedIds.length ? 'oklch(0.5 0.17 265)' : 'oklch(0.82 0.01 265)',
+      selAll: () => this.setState({ tsel: selectedIds.length ? [] : visible.map(task => task.id) }),
+      bulk: (() => {
+        const applyToSelected = (field, value) => {
+          selectedIds.forEach(id => this.setMyTask(id, field, value));
+        };
+        const isoInDays = days => {
+          const date = new Date();
+          date.setDate(date.getDate() + days);
+          return iso(date);
+        };
+        return [
+          {
+            label: 'Status',
+            go: registerMenu('b:st', 'Set status for ' + selectedIds.length, ST_OPTS, '', value =>
+              applyToSelected('status', value)
+            )
+          },
+          {
+            label: "Who's doing it",
+            go: registerMenu('b:ow', 'Assign ' + selectedIds.length + ' tasks to', TEAM_OPTS, '', value =>
+              applyToSelected('owner', value)
+            )
+          },
+          {
+            label: 'Priority',
+            go: registerMenu('b:pr', 'Set priority', PRI_OPTS, '', value => applyToSelected('pri', value))
+          },
+          {
+            label: 'Due date',
+            go: registerMenu(
+              'b:due',
+              'Set due date',
+              [
+                ['0', 'Today'],
+                ['1', 'Tomorrow'],
+                ['7', 'In a week'],
+                ['clr', 'Remove due date']
+              ],
+              '',
+              value => applyToSelected('due', value === 'clr' ? '' : isoInDays(+value))
+            )
+          },
+          {
+            label: 'Repeat',
+            go: registerMenu(
+              'b:rep',
+              'Repeat',
+              [
+                ['none', 'Does not repeat'],
+                ['daily', 'Every day'],
+                ['weekly', 'Every week'],
+                ['monthly', 'Every month']
+              ],
+              '',
+              value => applyToSelected('repeat', value)
+            )
+          }
+        ];
+      })(),
+      bulkDel: () => {
+        if (!confirm('Delete ' + selectedIds.length + ' tasks? This cannot be undone.')) return;
+        const ids = selectedIds.slice();
+        this.upd(draft => {
+          draft.tasks = draft.tasks.filter(task => !ids.includes(task.id));
+        });
+        this.setState({ tsel: [] });
+      },
+      pick: e => {
+        try {
+          e.currentTarget.showPicker();
+        } catch {
+          /* showPicker() is unsupported in some browsers */
+        }
+      },
+      coTabs: [['any', 'All'], ...CO_OPTS].map(([value, label]) => {
+        const company = coOf(value),
+          isActive = taskFilter.co === value;
+        return {
+          label,
+          n: String(openTasksAllCompanies.filter(task => value === 'any' || task.co === value).length),
+          hasTile: !!company.bg && value !== 'any',
+          tile: company.bg || '',
+          ini: company.ini || '',
+          fg: isActive ? 'oklch(0.23 0.015 265)' : MUTED,
+          bd: isActive ? 'oklch(0.23 0.015 265)' : 'transparent',
+          go: () => this.setState({ tf: { ...taskFilter, co: value }, fresh: [] })
+        };
+      }),
+      menuOpen: !!(pop && menus[pop]),
+      menu: menus[pop] || [],
+      menuTitle: titles[pop] || '',
+      hasMenuTitle: !!titles[pop],
+      popX: popPosition.x + 'px',
+      popTop: popPosition.top,
+      popBottom: popPosition.bottom
+    };
+    // Task detail panel (opened with state.tpeek).
+    const peekTask = data.tasks.find(task => task.id === this.state.tpeek);
+    let taskPanel = { close: () => this.setState({ tpeek: null }) };
+    if (peekTask) {
+      const id = peekTask.id,
+        company = coOf(peekTask.co),
+        owner = PEOPLE[peekTask.owner] || PEOPLE.both,
+        status = STATUS[peekTask.status] || STATUS['Not started'],
+        docId = 'task:' + id,
+        daysLeft = dayDiff(peekTask.due);
+      const overdue = !peekTask.done && daysLeft !== null && daysLeft < 0;
+      const subtasks = peekTask.subs || [],
+        doneCount = subtasks.filter(sub => sub.done).length;
+      /** Applies `mutate` to the open task inside a data update. */
+      const updatePeekTask = mutate =>
+        this.upd(draft => {
+          const stored = draft.tasks.find(item => item.id === id);
+          if (stored) mutate(stored);
+        });
+      const setSubField = (subId, field, value) =>
+        updatePeekTask(stored => {
+          const sub = (stored.subs || []).find(item => item.id === subId);
+          if (sub) sub[field] = value;
+        });
+      const addSub = after => {
+        const subId = uid();
+        updatePeekTask(stored => {
+          stored.subs = stored.subs || [];
+          const insertAt = after ? stored.subs.findIndex(item => item.id === after) : -1;
+          stored.subs.splice(insertAt > -1 ? insertAt + 1 : stored.subs.length, 0, {
+            id: subId,
+            title: '',
+            done: false,
+            due: ''
+          });
+        });
+        this._focus = { sel: '[data-sid="' + subId + '"]' };
+      };
+      const delSub = subId =>
+        updatePeekTask(stored => {
+          stored.subs = (stored.subs || []).filter(item => item.id !== subId);
+        });
+      const postComment = () => {
+        const text = (this.state.cdraft || '').trim();
+        if (!text) return;
+        updatePeekTask(stored => {
+          stored.comments = [...(stored.comments || []), { id: uid(), by: me, text, at: Date.now() }];
+        });
+        this.setState({ cdraft: '' });
+      };
+      const doc = this.getDoc(docId);
+      const navList = groups.flatMap(group => group.rows.map(row => row.id)),
+        navIndex = navList.indexOf(id),
+        navPrev = navIndex > 0 ? navList[navIndex - 1] : null,
+        navNext = navIndex > -1 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+      taskPanel = {
+        title: peekTask.title,
+        onTitle: e => setTaskField(id, 'title', e.target.value.replace(/\n/g, ' ')),
+        onTitleKey: e => {
+          if (
+            e.key === 'Enter' ||
+            (e.key === 'ArrowDown' && e.target.selectionStart === e.target.value.length)
+          ) {
+            e.preventDefault();
+            const firstBlock = doc.blocks.find(block => block.type !== 'divider');
+            if (firstBlock) {
+              this.focusBlock(firstBlock.id, 0);
+              this.forceUpdate();
+            }
+          }
+        },
+        st: {
+          label: peekTask.status,
+          tint: status.tint,
+          ink: status.ink,
+          dot: status.dot,
+          bd: status.bd,
+          toggle: registerMenu('pst:' + id, 'Status', ST_OPTS, peekTask.status, value =>
+            setTaskField(id, 'status', value)
+          )
+        },
+        co: {
+          label: company.name,
+          tint: company.tint,
+          ink: company.ink,
+          toggle: registerMenu(
+            'pco:' + id,
+            'Company',
+            CO_OPTS.map(([value, label]) => [value, label, coOf(value).bg || 'oklch(0.6 0.01 265)']),
+            peekTask.co,
+            value => setTaskField(id, 'co', value)
+          )
+        },
+        own: {
+          label: owner.first,
+          ini: owner.ini,
+          bg: owner.bg,
+          toggle: registerMenu('pow:' + id, "Who's doing it", TEAM_OPTS, peekTask.owner, value =>
+            setTaskField(id, 'owner', value)
+          )
+        },
+        pr: {
+          label: peekTask.pri,
+          dot: PRI_DOT[peekTask.pri] || PRI_DOT.Medium,
+          toggle: registerMenu('ppr:' + id, 'Priority', PRI_OPTS, peekTask.pri, value =>
+            setTaskField(id, 'pri', value)
+          )
+        },
+        goal: (() => {
+          const goalChoices = data.goals.filter(goal => goal.co === peekTask.co || goal.id === peekTask.goal),
+            linkedGoal = data.goals.find(goal => goal.id === peekTask.goal);
+          return {
+            label: linkedGoal
+              ? linkedGoal.title || 'Untitled goal'
+              : goalChoices.length
+                ? 'Link to a goal'
+                : 'No goals for ' + company.name + ' yet',
+            color: linkedGoal ? INK_C : 'oklch(0.65 0.01 265)',
+            toggle: registerMenu(
+              'pgl:' + id,
+              'Counts towards goal',
+              [
+                ['', 'No goal'],
+                ...goalChoices.map(goal => [
+                  goal.id,
+                  goal.title || 'Untitled goal',
+                  GST[goalCalc(goal, data.tasks).status].dot
+                ])
+              ],
+              peekTask.goal || '',
+              value => setTaskField(id, 'goal', value)
+            )
+          };
+        })(),
+        wait: {
+          label: peekTask.waiting
+            ? (PEOPLE[peekTask.waiting] || {}).first + ' (needs to reply / act)'
+            : 'Nobody',
+          color: peekTask.waiting ? 'oklch(0.45 0.11 65)' : 'oklch(0.65 0.01 265)',
+          toggle: registerMenu(
+            'pwt:' + id,
+            'Waiting on',
+            [
+              ['', 'Nobody'],
+              ...memberOpts(false).map(([personId, first, bg]) => [personId, first, bg, 'Shows in ' + first + '’s Today'])
+            ],
+            peekTask.waiting || '',
+            value => setTaskField(id, 'waiting', value)
+          )
+        },
+        rep: {
+          label:
+            { weekly: 'Every week', monthly: 'Every month', daily: 'Every day' }[peekTask.repeat] ||
+            'Does not repeat',
+          color: peekTask.repeat && peekTask.repeat !== 'none' ? INK_C : 'oklch(0.65 0.01 265)',
+          toggle: registerMenu(
+            'prp:' + id,
+            'Repeat',
+            [
+              ['none', 'Does not repeat'],
+              ['daily', 'Every day'],
+              ['weekly', 'Every week', '', 'Next copy is created when you mark it Done'],
+              ['monthly', 'Every month']
+            ],
+            peekTask.repeat || 'none',
+            value => setTaskField(id, 'repeat', value)
+          )
+        },
+        start: peekTask.start || '',
+        onStart: e => setTaskField(id, 'start', e.target.value),
+        startColor: peekTask.start ? 'oklch(0.25 0.012 265)' : 'oklch(0.7 0.01 265)',
+        due: peekTask.due || '',
+        onDue: e => setTaskField(id, 'due', e.target.value),
+        dueColor: overdue ? RED : peekTask.due ? 'oklch(0.25 0.012 265)' : 'oklch(0.7 0.01 265)',
+        dueWeight: overdue ? '600' : '400',
+        subInfo: subtasks.length ? doneCount + ' of ' + subtasks.length + ' done' : '',
+        hasSubs: !!subtasks.length,
+        noSubs: !subtasks.length,
+        subPct: (subtasks.length ? Math.round((doneCount / subtasks.length) * 100) : 0) + '%',
+        addSub: () => addSub(null),
+        subs: subtasks.map(sub => {
+          const subDaysLeft = dayDiff(sub.due),
+            subOverdue = !sub.done && subDaysLeft !== null && subDaysLeft < 0;
+          return {
+            id: sub.id,
+            title: sub.title,
+            onTitle: e => setSubField(sub.id, 'title', e.target.value),
+            onKey: e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addSub(sub.id);
+              } else if (e.key === 'Backspace' && !sub.title) {
+                e.preventDefault();
+                const subIndex = subtasks.findIndex(item => item.id === sub.id);
+                delSub(sub.id);
+                if (subtasks[subIndex - 1])
+                  this._focus = { sel: '[data-sid="' + subtasks[subIndex - 1].id + '"]', pos: 'end' };
+              }
+            },
+            due: sub.due || '',
+            onDue: e => setSubField(sub.id, 'due', e.target.value),
+            dueColor: subOverdue ? RED : sub.due ? 'oklch(0.3 0.012 265)' : 'oklch(0.72 0.01 265)',
+            mark: sub.done ? '✓' : '',
+            checkBg: sub.done ? 'oklch(0.55 0.14 150)' : '#fff',
+            checkBorder: sub.done ? 'oklch(0.55 0.14 150)' : 'oklch(0.75 0.01 265)',
+            deco: sub.done ? 'line-through' : 'none',
+            color: sub.done ? MUTED : 'oklch(0.23 0.015 265)',
+            toggle: () => setSubField(sub.id, 'done', !sub.done),
+            remove: () => delSub(sub.id)
+          };
+        }),
+        blocks: this.blocksVM(docId, doc.blocks),
+        addBlockEnd: () => this.addBlockEnd(docId),
+        comments: (peekTask.comments || []).map(comment => {
+          const author = PEOPLE[comment.by] || PEOPLE.both;
+          return {
+            ini: author.ini,
+            bg: author.bg,
+            name: author.first,
+            text: comment.text,
+            when: new Date(comment.at).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              hour: 'numeric',
+              minute: '2-digit'
+            }),
+            remove: () =>
+              updatePeekTask(stored => {
+                stored.comments = (stored.comments || []).filter(item => item.id !== comment.id);
+              })
+          };
+        }),
+        cdraft: this.state.cdraft || '',
+        onC: e => this.setState({ cdraft: e.target.value }),
+        postC: postComment,
+        onCKey: e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            postComment();
+          }
+        },
+        created: peekTask.created
+          ? 'Created ' +
+            new Date(peekTask.created).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              hour: 'numeric',
+              minute: '2-digit'
+            })
+          : '',
+        close: () => this.setState({ tpeek: null, pop: null }),
+        remove: () => this.delMyTask(id),
+        markDone: () => this.myTaskAct(id, 'done'),
+        dup: () => this.myTaskAct(id, 'dup'),
+        doneLabel: peekTask.done ? '↺ Reopen' : '✓ Mark done',
+        doneTip: peekTask.done ? 'Move back to Not started' : 'Mark this task as finished',
+        doneBg: peekTask.done ? '#fff' : 'oklch(0.55 0.14 150)',
+        doneFg: peekTask.done ? 'oklch(0.35 0.012 265)' : '#fff',
+        doneBd: peekTask.done ? 'oklch(0.9 0.006 85)' : 'oklch(0.55 0.14 150)',
+        more: registerMenu(
+          'pa:' + id,
+          'More actions',
+          taskActionOptions(peekTask).filter(option => !['open', 'done', 'dup', 'del'].includes(option[0])),
+          '',
+          value => this.myTaskAct(id, value)
+        ),
+        noPrev: !navPrev,
+        noNext: !navNext,
+        prevOp: navPrev ? '1' : '0.4',
+        nextOp: navNext ? '1' : '0.4',
+        prev: () => navPrev && this.setState({ tpeek: navPrev, pop: null }),
+        next: () => navNext && this.setState({ tpeek: navNext, pop: null })
+      };
+      this._tpPrev = taskPanel.prev;
+      this._tpNext = taskPanel.next;
+    }
+    tasksView.menuOpen = !!(pop && menus[pop]);
+    tasksView.menu = menus[pop] || [];
+    tasksView.menuTitle = titles[pop] || '';
+    tasksView.hasMenuTitle = !!titles[pop];
 
     // Hiring
     const hireFilter = this.state.hx || HX_DEF,
@@ -307,9 +1277,7 @@ export default class HQTasksHiringDocs extends HQAssistant {
       filters: [
         hiringSelect('owner', 'any', [
           ['any', 'Any hiring manager'],
-          ['rahul', 'Manager: ' + PEOPLE.rahul.first],
-          ['saswat', 'Manager: ' + PEOPLE.saswat.first],
-          ['both', 'Manager: Both']
+          ...memberOpts().map(([personId, label]) => [personId, 'Manager: ' + label])
         ]),
         hiringSelect('pri', 'any', [
           ['any', 'Any priority'],
@@ -1271,8 +2239,7 @@ export default class HQTasksHiringDocs extends HQAssistant {
       filters: [
         docSelect('owner', 'any', [
           ['any', 'Anyone'],
-          ['rahul', 'By ' + PEOPLE.rahul.first],
-          ['saswat', 'By ' + PEOPLE.saswat.first]
+          ...memberOpts(false).map(([personId, label]) => [personId, 'By ' + label])
         ]),
         docSelect('status', 'any', [
           ['any', 'Any status'],
@@ -1468,11 +2435,7 @@ export default class HQTasksHiringDocs extends HQAssistant {
         : [],
       pbySeg: currentPage
         ? docSegment(
-            [
-              ['rahul', PEOPLE.rahul.first],
-              ['saswat', PEOPLE.saswat.first],
-              ['both', 'Both']
-            ],
+            memberOpts().map(([personId, label]) => [personId, label]),
             currentPage.by || 'both',
             value => setPageField('by', value)
           )
@@ -1606,6 +2569,9 @@ export default class HQTasksHiringDocs extends HQAssistant {
     return {
       popOpen: !!pop,
       closePop: () => this.setState({ pop: null }),
+      tk: tasksView,
+      tp: taskPanel,
+      hasTPeek: !!peekTask,
       toastOn: !!this.state.toast,
       toastText: this.state.toast || '',
       toastLabel: this.state.toastLabel || 'Undo',

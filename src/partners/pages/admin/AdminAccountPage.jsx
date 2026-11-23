@@ -1,4 +1,4 @@
-import { AppearanceCard, PasswordCard, SessionsCard } from '@/partners/components/account/SecurityCard';
+import { PasswordCard, SessionsCard } from '@/partners/components/account/SecurityCard';
 import { DynamicForm } from '@/partners/components/forms/DynamicForm';
 import { useUser } from '@/partners/components/UserProvider';
 import { Card, Icon, PageHeader, SkeletonCards, Tabs, hue, initials, useToast } from '@/partners/components/ui';
@@ -55,7 +55,6 @@ export default function AdminAccountPage() {
           <PasswordCard />
           <div className="stack stick" style={{ gap: 16 }}>
             <SessionsCard user={user} />
-            <AppearanceCard />
           </div>
         </div>
       )}

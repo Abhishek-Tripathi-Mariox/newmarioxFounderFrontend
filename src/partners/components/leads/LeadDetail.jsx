@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { DynamicForm } from '@/partners/components/forms/DynamicForm';
 import { usePipeline } from '@/partners/components/SettingsProvider';
 import { useUser } from '@/partners/components/UserProvider';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 import { Avatar, Badge, Button, Card, Chips, Icon, Input, Modal, Note, Select, hue, useToast, SkeletonCards } from '@/partners/components/ui';
 import { useApi } from '@/partners/hooks/useApi';
 import { api } from '@/partners/api';
@@ -53,6 +54,10 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
   const navigate = useNavigate();
   const toast = useToast();
   const { user } = useUser();
+  // Admins: by their role's "Leads" permission (Edit = change / log / follow-ups, Delete = delete).
+  const ppCan = usePpCan();
+  const mayEdit = !admin || ppCan('pp_leads', 'e');
+  const mayDelete = !admin || ppCan('pp_leads', 'd');
   const cfg = usePipeline();
   const { data, setData } = useApi(`/leads/${id}`);
   const partners = useApi(admin ? '/admin/users' : null);
@@ -70,6 +75,7 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
 
   // Every change goes through PATCH and the response replaces local state.
   async function patch(body, msg) {
+    if (!mayEdit) return toast('Your role can view partner leads but not change them', true);
     try {
       setData(await api.patch(`/leads/${id}`, body));
       if (msg) toast(msg);
@@ -106,8 +112,8 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
       <div className="row wrap" style={{ gap: 8 }}>
         <Link className="more" to={backHref}><Icon name="chevL" size="s" />Back to pipeline</Link>
         <span className="spacer" />
-        <Button size="sm" icon="note" onClick={() => setEditing(true)}>{admin ? 'Edit / reassign' : 'Edit lead'}</Button>
-        <Button size="sm" variant="danger" icon="trash" onClick={remove}>Delete</Button>
+        {mayEdit && <Button size="sm" icon="note" onClick={() => setEditing(true)}>{admin ? 'Edit / reassign' : 'Edit lead'}</Button>}
+        {mayDelete && <Button size="sm" variant="danger" icon="trash" onClick={remove}>Delete</Button>}
       </div>
 
       <div className="ccard" style={{ ['--glow']: `hsla(${hue(lead.company)},70%,55%,.55)`, padding: 26 }}>
@@ -169,6 +175,7 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
       <div className="split">
         <Card title="Activity" subtitle="Everything that happened on this lead, newest first.">
           {/* 1. Log a new entry */}
+          {mayEdit && (
           <form
             className="log-box"
             onSubmit={e => {
@@ -196,6 +203,7 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
               <Button variant="ink" icon="plus">Log {typeLabel(logType).toLowerCase()}</Button>
             </div>
           </form>
+          )}
 
           {/* 2. Timeline, with its own filter */}
           <div className="between wrap" style={{ margin: '22px 0 12px', gap: 10 }}>
@@ -228,6 +236,7 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
             ) : (
               <div className="empty">No follow-ups yet</div>
             )}
+            {mayEdit && (
             <form
               className="stack"
               style={{ marginTop: 14, gap: 8 }}
@@ -245,6 +254,7 @@ export function LeadDetail({ id, backHref = '/partners/leads', admin }) {
                 <Button size="sm" icon="plus">Add</Button>
               </div>
             </form>
+            )}
           </Card>
 
           <Card title="Contact">

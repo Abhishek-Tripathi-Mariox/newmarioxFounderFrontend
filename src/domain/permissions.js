@@ -45,7 +45,8 @@ export function isPMof(state, p) {
   const u = findUser(state, state.viewAs);
   if (!u) return false;
   if (u.role === 'r-super') return true;
-  return u.role === 'r-pm' && !!p && (u.memberId === p.pm || u.id === `u-${p.pm}`);
+  // The project's PM, in any role that can edit projects (not only the built-in Project Manager).
+  return can(state, 'projects', 'e') && !!p && (u.memberId === p.pm || u.id === `u-${p.pm}`);
 }
 
 /**
@@ -139,6 +140,9 @@ export function teamPids(state) {
   const self = [pidOf(u)];
   return scope === 'team' ? self.concat(viewReportees(state).map((x) => x.pid)) : self;
 }
+
+/** Signed in as yourself (not a Super Admin previewing someone else). */
+export const isOwnSession = (state) => !state.viewAs || (!!state.me && state.viewAs === state.me.id);
 
 /** Attendance / Reports pages: the Super Admin, or a role with "Attendance & reports" View. */
 export const hasTeamView = (state) => !state.viewAs || can(state, 'att', 'v');

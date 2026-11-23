@@ -1,6 +1,6 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import React from 'react';
-import { KEY, PEOPLE, COS, coOf, segOf, ACCENTS, SIDES, SIZES, PAGE_DEF, PF_DEF, PARTNER_DEF, PARTNER_ROWS, iso, uid, act, HX_DEF, RX_DEF, DX_DEF, parseQuick, normRv, load } from './core';
+import { KEY, PEOPLE, teamLine, COS, coOf, segOf, ACCENTS, SIDES, SIZES, PAGE_DEF, COL_DEF, PF_DEF, PARTNER_DEF, PARTNER_ROWS, iso, plus, uid, act, HX_DEF, RX_DEF, DX_DEF, parseQuick, normRv, load } from './core';
 import { savePrefs } from '@/founders/api/workspace';
 import WorkspaceSync from '../sync/WorkspaceSync';
 import { TEAM_TASK_VIEWS, TEAM_TASKS_REFRESH_MS, createTeamTask, openTeamTaskInHQ, reloadTeamTasks, toggleTeamTask, watchTeamTasks } from '../teamTasks/hqTeamTasks';
@@ -18,16 +18,20 @@ const SCROLL_CLOSED_POPOVER = /^(p?st|p?co|p?dp|dp|p?ow|p?pr|pgl|pwt|prp|ra|pa|f
  */
 export default class HQState extends React.Component {
   // Per-screen UI state. Keys keep their prototype names because the other logic files and views read them.
-  // `me` is the signed-in account's seat; `prefs` is keyed by seat like the prototype, holding only "me".
+  // `me` is the signed-in account's HQ person id; `prefs` is keyed by person id like the prototype, holding only "me".
   state = {
     prefs: { [this.props.account.seat]: this.props.prefs || {} },
     view: (this.props.prefs && this.props.prefs.start) || 'home',
     coView: null, me: this.props.account.seat, data: load(this.props.workspace.data),
-    nr: { role: '', co: 'mariox', owner: 'rahul', budget: '', due: '' },
+    nr: { role: '', co: 'mariox', owner: this.props.account.seat, budget: '', due: '' },
     sel: null, ai: { busy: false, note: '', err: false },
     projCo: 'combined', fco: 'combined', fhz: 12, fview: 'chart',
     fsc: { grow: null, costPct: 0, hires: false, oneAmt: 0, oneM: 3, raise: 0, raiseM: 6 }, fq: '', fcat: 'any',
     frf: 'open', fadd: {},
+    // My tasks (the founders' own tasks in the workspace, data.tasks): filters, open task page, list layout.
+    tf: { owner: 'all', co: 'any', status: 'any', pri: 'any', due: 'any', q: '' }, tpeek: null,
+    tgroup: localStorage.getItem(KEY + '-tgroup') || 'status',
+    tsort: localStorage.getItem(KEY + '-tsort') || 'due', tview: localStorage.getItem(KEY + '-tview') || 'list',
     cmd: { open: false, q: '', idx: 0 }, gopen: null, gf: { status: 'any', owner: 'any', when: 'any', q: '' },
     gsort: localStorage.getItem(KEY + '-gsort') || 'target',
     ggroup: localStorage.getItem(KEY + '-ggroup') || 'company',
@@ -90,7 +94,7 @@ export default class HQState extends React.Component {
       onRemoteChange: remote => this.showServerWorkspace(remote),
       onConflict: remote => {
         this.showServerWorkspace(remote);
-        this.toastMsg('Updated by ' + ((remote.updatedBy && remote.updatedBy.name) || 'the other founder') + ' — showing the latest');
+        this.toastMsg('Updated by ' + ((remote.updatedBy && remote.updatedBy.name) || 'another founder') + ' — showing the latest');
       },
       onSaveError: error => this.toastMsg('Couldn’t save your changes: ' + error.message),
     });
@@ -131,18 +135,24 @@ export default class HQState extends React.Component {
         this.setState({ pop: null, slash: null });
         return;
       }
-      if (this.state.dopen) this.setState({ dopen: null });
+      if (this.state.tpeek) this.setState({ tpeek: null });
+      else if (this.state.dopen) this.setState({ dopen: null });
       else if (this.state.sel && this.state.view === 'research') this.setState({ sel: null });
       else if (this.state.gopen) this.setState({ gopen: null });
       else if (this.state.peek) this.setState({ peek: null });
     };
     window.addEventListener('keydown', this._onEsc);
 
-    // Cmd/Ctrl+K opens the command palette.
+    // Cmd/Ctrl+K opens the command palette; Alt+Up/Down steps through tasks in the My tasks page panel.
     this._onK = event => {
       if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
         event.preventDefault();
         this.openCmd();
+      }
+      if (event.altKey && this.state.tpeek && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const step = event.key === 'ArrowUp' ? this._tpPrev : this._tpNext;
+        if (step) step();
       }
     };
     window.addEventListener('keydown', this._onK);
@@ -193,16 +203,41 @@ export default class HQState extends React.Component {
   autosize() {
     if (this._fs === undefined) this._fs = !!(window.CSS && CSS.supports && CSS.supports('field-sizing', 'content'));
     if (this._fs) return;
-    document.querySelectorAll('textarea[data-bid]').forEach(textarea => {
+    document.querySelectorAll('textarea[data-bid], textarea[data-tpeek-title]').forEach(textarea => {
       textarea.style.height = 'auto';
       textarea.style.height = textarea.scrollHeight + 'px';
     });
   }
 
+  /** My tasks: add an empty founder task, pre-filled from `preset` or the active filters, and focus it. */
+  newMyTask(preset) {
+    preset = preset || {};
+    const { tf, me, fresh, tgroup, tview } = this.state, id = uid();
+    const status = preset.status || (tf.status !== 'any' ? tf.status : 'Not started');
+    const co = preset.co || (tf.co !== 'any' ? tf.co : 'mariox');
+    const owner = preset.owner || (tf.owner !== 'all' ? tf.owner : me);
+    const pri = preset.pri || (tf.pri !== 'any' ? tf.pri : 'Medium');
+    this.upd(data => {
+      data.tasks.push({
+        id, title: '', co, owner, start: '', due: '', status, pri,
+        done: status === 'Done', notes: '', created: Date.now(),
+      });
+    });
+    // The list group the new task lands in, so it can be expanded.
+    const groupKey = tgroup + ':' + ({ status, company: co, owner, priority: pri, none: 'all' })[tgroup];
+    if (tview === 'board') {
+      this._focus = { sel: '[data-tpeek-title]' };
+      this.setState({ fresh: [id, ...fresh], pop: null, tpeek: id });
+    } else {
+      this._focus = { sel: `[data-tid="${id}"]` };
+      this.setState({ fresh: [id, ...fresh], pop: null, gcol: { ...this.state.gcol, [groupKey]: false } });
+    }
+  }
+
   /** Current user's preferences merged over defaults; `pages` lists every known page in the user's order. */
   pf() {
     const saved = (this.state.prefs || {})[this.state.me] || {};
-    const prefs = { ...PF_DEF, ...saved };
+    const prefs = { ...PF_DEF, ...saved, cols: { ...PF_DEF.cols, ...(saved.cols || {}) } };
     const savedPages = (saved.pages || []).filter(page => PAGE_DEF.some(def => def[0] === page.id));
     // Insert pages the user has never arranged right after their predecessor in PAGE_DEF.
     const pages = [...savedPages];
@@ -215,7 +250,7 @@ export default class HQState extends React.Component {
     return prefs;
   }
 
-  /** Replaces the on-screen data with a copy from the server (the other founder's latest save). */
+  /** Replaces the on-screen data with a copy from the server (another founder's latest save). */
   showServerWorkspace(remote) {
     this._pend = null;
     this.setState({ data: load(remote.data) });
@@ -251,7 +286,28 @@ export default class HQState extends React.Component {
       this.setPf({ pages });
     };
     const lastPage = pf.pages.length - 1;
+    const setPref = (key, value) => {
+      localStorage.setItem(KEY + '-' + key, value);
+      this.setState({ [key]: value });
+    };
+    const chip = selected => ({
+      bg: selected ? 'color-mix(in oklch, var(--acc) 10%, #fff)' : '#fff',
+      bd: selected ? 'var(--acc, oklch(0.5 0.17 265))' : 'oklch(0.9 0.006 85)',
+      fg: selected ? 'var(--acc2, oklch(0.42 0.17 265))' : 'oklch(0.45 0.012 265)',
+      mark: selected ? '✓' : '+',
+    });
     return {
+      // My tasks: default layout and table columns.
+      viewSeg: segOf([['list', 'List'], ['board', 'Board']], this.state.tview, value => setPref('tview', value)),
+      groupSeg: segOf(
+        [['status', 'Status'], ['company', 'Company'], ['owner', 'Team'], ['priority', 'Priority'], ['none', 'None']],
+        this.state.tgroup, value => setPref('tgroup', value)),
+      sortSeg: segOf(
+        [['due', 'Due date'], ['start', 'Start date'], ['priority', 'Priority'], ['name', 'Name'], ['newest', 'Newest']],
+        this.state.tsort, value => setPref('tsort', value)),
+      cols: COL_DEF.map(([colKey, label]) => ({
+        label, ...chip(pf.cols[colKey]), go: () => this.setPf({ cols: { ...pf.cols, [colKey]: !pf.cols[colKey] } }),
+      })),
       accents: ACCENTS.map(([id, label, color]) => ({
         label, sw: color, ring: ring(pf.acc === id), go: () => this.setPf({ acc: id }),
       })),
@@ -285,7 +341,7 @@ export default class HQState extends React.Component {
         this.setState({ prefs: allPrefs }, () => this.savePrefsNow());
         this.toastMsg('Settings reset to default');
       },
-      who: (PEOPLE[this.state.me] || PEOPLE.rahul).first,
+      who: (PEOPLE[this.state.me] || PEOPLE.both).first,
     };
   }
 
@@ -337,7 +393,122 @@ export default class HQState extends React.Component {
     };
   }
 
-  // ─── Team tasks (HQ's only tasks; see teamTasks/hqTeamTasks) ──────────────────────────────────
+  // ─── My tasks (the founders' own tasks, data.tasks) ─────────────────────────────────────────
+
+  /** My tasks: delete a founder task, with an Undo toast that puts it back at its old position. */
+  delMyTask(id) {
+    const index = this.state.data.tasks.findIndex(task => task.id === id);
+    if (index < 0) return;
+    const snapshot = JSON.parse(JSON.stringify(this.state.data.tasks[index]));
+    this.upd(data => { data.tasks = data.tasks.filter(task => task.id !== id); });
+    this.setState({ tpeek: this.state.tpeek === id ? null : this.state.tpeek, pop: null });
+    this.toastMsg('Deleted “' + (snapshot.title || 'Untitled task') + '”', () => {
+      this.upd(data => {
+        if (!data.tasks.some(task => task.id === id)) data.tasks.splice(Math.min(index, data.tasks.length), 0, snapshot);
+      });
+    });
+  }
+
+  /** My tasks: run a task action from a row/peek menu (open, del, done, start, tmr, nw, clr, copy, dup). */
+  myTaskAct(id, action) {
+    const task = this.state.data.tasks.find(candidate => candidate.id === id);
+    if (!task) return;
+    this.setState({ pop: null });
+    if (action === 'open') return this.setState({ tpeek: id });
+    if (action === 'del') return this.delMyTask(id);
+    if (action === 'done') {
+      this.setMyTask(id, 'status', task.done ? 'Not started' : 'Done');
+      return this.toastMsg(task.done ? 'Task reopened' : 'Marked as done');
+    }
+    if (action === 'start') {
+      this.setMyTask(id, 'status', 'In progress');
+      return this.toastMsg('Moved to In progress');
+    }
+    // tmr = tomorrow, nw = next week, clr = clear the due date
+    if (action === 'tmr' || action === 'nw' || action === 'clr') {
+      const previousDue = task.due || '';
+      const newDue = action === 'clr' ? '' : plus(action === 'tmr' ? 1 : 7);
+      this.setMyTask(id, 'due', newDue);
+      const message = action === 'clr'
+        ? 'Due date removed'
+        : 'Due date moved to ' + new Date(newDue + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+      return this.toastMsg(message, () => this.setMyTask(id, 'due', previousDue));
+    }
+    if (action === 'copy') {
+      const text = [
+        task.title || 'Untitled task',
+        'Status: ' + task.status + ' · Priority: ' + task.pri + (task.due ? ' · Due ' + task.due : ''),
+      ].concat((task.subs || []).map(sub => (sub.done ? '[x] ' : '[ ] ') + sub.title)).join('\n');
+      if (navigator.clipboard) navigator.clipboard.writeText(text);
+      return this.toastMsg('Task copied as text');
+    }
+    if (action === 'dup') {
+      const copyId = uid(), copy = JSON.parse(JSON.stringify(task));
+      copy.id = copyId;
+      copy.title = (task.title || 'Untitled task') + ' (copy)';
+      copy.created = Date.now();
+      copy.comments = [];
+      copy.subs = (copy.subs || []).map(sub => ({ ...sub, id: uid() }));
+      if (copy.blocks) copy.blocks = copy.blocks.map(block => ({ ...block, id: uid() }));
+      this.upd(data => {
+        const originalIndex = data.tasks.findIndex(other => other.id === id);
+        data.tasks.splice(originalIndex + 1, 0, copy);
+      });
+      this.setState({ tpeek: copyId, fresh: [copyId, ...this.state.fresh] });
+      this.toastMsg('Copy created and opened', () => this.delMyTaskSilent(copyId));
+    }
+  }
+
+  /** Delete a task without a toast (used to undo a duplicate). */
+  delMyTaskSilent(id) {
+    this.upd(data => { data.tasks = data.tasks.filter(task => task.id !== id); });
+    if (this.state.tpeek === id) this.setState({ tpeek: null });
+  }
+
+  /**
+   * My tasks: set one founder-task field and log it to the activity feed. Completing a repeating task
+   * also creates its next occurrence with dates shifted by the repeat interval.
+   */
+  setMyTask(id, field, value) {
+    const me = this.state.me;
+    this.upd(data => {
+      const task = data.tasks.find(candidate => candidate.id === id);
+      if (!task) return;
+      const previous = task[field];
+      task[field] = value;
+      if (field === 'status' && previous !== value) {
+        task.done = value === 'Done';
+        task.doneAt = value === 'Done' ? Date.now() : null;
+        act(data, me, (value === 'Done' ? 'completed ' : 'moved to ' + value + ': ') + '“' + (task.title || 'Untitled task') + '”', task.co);
+        if (value === 'Done' && task.repeat && task.repeat !== 'none') {
+          const shift = dateStr => {
+            if (!dateStr) return '';
+            const date = new Date(dateStr + 'T00:00:00');
+            if (task.repeat === 'weekly') date.setDate(date.getDate() + 7);
+            else if (task.repeat === 'monthly') date.setMonth(date.getMonth() + 1);
+            else date.setDate(date.getDate() + 1);
+            return iso(date);
+          };
+          data.tasks.push({
+            ...JSON.parse(JSON.stringify(task)),
+            id: uid(), status: 'Not started', done: false, doneAt: null,
+            start: shift(task.start), due: shift(task.due || iso(new Date())),
+            subs: (task.subs || []).map(sub => ({ ...sub, id: uid(), done: false })),
+            comments: [], created: Date.now(),
+          });
+        }
+      }
+      if (field === 'waiting' && value && value !== previous) {
+        act(data, me, 'is waiting on ' + (PEOPLE[value] || {}).first + ' for “' + (task.title || 'Untitled task') + '”', task.co);
+      }
+      if (field === 'owner' && value !== previous && previous) {
+        act(data, me, 'handed “' + (task.title || 'Untitled task') + '” to ' + (PEOPLE[value] || {}).first, task.co);
+      }
+    });
+  }
+
+
+  // ─── Team tasks (HQ's team tasks; see teamTasks/hqTeamTasks) ──────────────────────────────────
 
   /**
    * Every team task the founder can see, in HQ's task shape, plus what each was made from in HQ
@@ -463,7 +634,7 @@ export default class HQState extends React.Component {
     }
     this.setState({ wrBusy: true, wrNote: 'Drafting…' });
     try {
-      const draft = await window.claude.complete('You write a weekly review for two co-founders (Rahul Garg, founder; Saswat Sahu, co-founder) running Mariox Software, HROO and Arth in India. Using only the facts below, write a short review in plain text: 3-5 lines of wins, 2-4 lines of misses or risks, and 3 priorities for next week. Lines start with "- ". Group under the plain headings Wins, Misses, Next week. No markdown symbols other than "- ". Under 200 words.\n\nFACTS:\n' + facts);
+      const draft = await window.claude.complete('You write a weekly review for the founders (' + teamLine() + ') running Mariox Software, HROO and Arth in India. Using only the facts below, write a short review in plain text: 3-5 lines of wins, 2-4 lines of misses or risks, and 3 priorities for next week. Lines start with "- ". Group under the plain headings Wins, Misses, Next week. No markdown symbols other than "- ". Under 200 words.\n\nFACTS:\n' + facts);
       this.upd(data => { data.reviews[key] = { ...normRv(data.reviews[key]), summary: draft.trim() }; });
       this.setState({ wrBusy: false, wrNote: 'Draft added. Edit it as you like; it saves automatically.' });
     } catch {

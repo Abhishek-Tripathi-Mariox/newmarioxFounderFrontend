@@ -6,7 +6,7 @@ import { DAY, MINUTE, sod, addDays, clock, fmtDur, ymd } from '@/lib/date';
 import {
   resolveRange, workdays, withTeams, isExpectedDay, LATE_MS, SEG, narrateDay, workedColor, dayLongShortMonth,
 } from '@/features/attendance/shared/attendanceUtils';
-import { internalOn } from '@/features/attendance/shared/internalWork';
+import { internalOn, teamTasksOn } from '@/features/attendance/shared/internalWork';
 
 export const REP_DEFAULTS = { person: '', range: 'today', date: '', tab: 'timeline', tday: 0, tmode: 'day', tteam: '' };
 
@@ -129,6 +129,7 @@ export function buildPopover(S, pop, now) {
     ].map(([label, value, fg]) => ({ label, value, fg: fg || 'oklch(0.23 0.015 265)' })),
     events,
     internal: internalOn(S.reports, pop.pid, d),
+    teamTasks: teamTasksOn(S.reports, pop.pid, d),
   };
 }
 
@@ -168,6 +169,7 @@ export function buildHoursLog(S, RF, now) {
         worked: fmtDur(s.work),
         workedColor: workedColor(s.work, d, T),
         internal: internalOn(S.reports, p.id, d),
+        teamTasks: teamTasksOn(S.reports, p.id, d),
       });
     });
     return {

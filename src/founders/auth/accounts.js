@@ -1,16 +1,28 @@
 /**
  * Account helpers shared by the sign-in screens and the Accounts dialog. Accounts live on the server
- * (src/api/users.js); this file only holds the seat model and form checks.
+ * (src/api/users.js); this file only holds the member model and form checks.
  *
- * Founders HQ is built for two founders, so every account takes one of two seats. The seat ids are the
- * ones Founders HQ uses internally for its people ('rahul' = founder seat, 'saswat' = co-founder seat);
- * what people see is the account's own name.
+ * Founders HQ has any number of members, each a Founder or a Co-founder (`role`). Every member has a
+ * stable HQ person id (`seat`) that HQ data uses for owners, sign-offs and prefs: the first two
+ * founders kept the original ids ('rahul', 'saswat'); later members get one from their user id.
+ * What people see is the account's own name.
  */
-export const SEATS = [
-  { id: 'rahul', label: 'Founder' },
-  { id: 'saswat', label: 'Co-founder' },
+export const ROLES = [
+  { id: 'founder', label: 'Founder' },
+  { id: 'cofounder', label: 'Co-founder' },
 ];
-export const seatLabel = (seatId) => SEATS.find((seat) => seat.id === seatId)?.label || '';
+export const roleLabel = (role) => ROLES.find((item) => item.id === role)?.label || 'Co-founder';
+/** The account's role label (older servers sent only `seatLabel`). */
+export const accountRoleLabel = (account) => account?.seatLabel || roleLabel(account?.role);
+
+/** A member's colour, stable per person id (the two original seats keep their colours). */
+const LEGACY_COLORS = { rahul: 'oklch(0.55 0.17 265)', saswat: 'oklch(0.56 0.12 175)' };
+const MEMBER_HUES = [30, 330, 140, 60, 210, 0, 290, 100, 240, 160];
+export function personColor(personId) {
+  if (LEGACY_COLORS[personId]) return LEGACY_COLORS[personId];
+  const hash = [...String(personId || '')].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return 'oklch(0.56 0.14 ' + MEMBER_HUES[hash % MEMBER_HUES.length] + ')';
+}
 
 export function initialsOf(name) {
   return String(name || '')
@@ -22,9 +34,6 @@ export function initialsOf(name) {
 }
 
 const normaliseEmail = (email) => String(email || '').trim().toLowerCase();
-
-/** Seats nobody has taken yet. */
-export const freeSeats = (accounts) => SEATS.filter((seat) => !accounts.some((account) => account.seat === seat.id));
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MIN_PASSWORD_LENGTH = 8;

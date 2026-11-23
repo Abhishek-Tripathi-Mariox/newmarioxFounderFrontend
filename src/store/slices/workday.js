@@ -6,6 +6,21 @@ import { getOwners } from '@/store/owners';
 import { fetchEvents, fetchLive, fetchReports, fromApiLog, hasTeam, isCeo, workdayApi } from '@/api/workday';
 import { serverNow } from '@/lib/clock';
 
+/**
+ * End shift → team task row: `{id, title, status, prio, due, p, pName, leadName, aName, mine,
+ * doneToday, done (ticked), h, note}`. Tasks already Done today come ticked (and stay ticked).
+ */
+const toTaskRow = (x) => ({
+  id: x.id, title: x.title, status: x.status, prio: x.priority || '', due: x.dueDate || '', p: x.projectId || '', pName: x.projectName || '',
+  leadName: x.leadName || '', aName: x.assigneeName || '', mine: !!x.mine, doneToday: x.status === 'Done',
+  done: x.status === 'Done', h: '', note: '',
+});
+
+/** Team task rows worth sending: ticked, with hours or with a note. */
+const taskRowsToSend = (rows) => (rows || [])
+  .map((r) => ({ id: r.id, done: !!r.done, h: r.h === '' ? 0 : +r.h || 0, note: (r.note || '').trim() }))
+  .filter((r) => r.done || r.h > 0 || r.note);
+
 /** Same JSON → same reference (keeps polling from re-rendering when nothing changed). */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -143,6 +158,10 @@ export const createWorkdaySlice = (set, get) => {
           get().openModal('eos', {
             who: f.who || pid, sales: !!f.sales, done: f.done || '', blockers: f.blockers || '', plan: f.plan || '', outcome: f.outcome || '',
             calls: str(f.calls), meetings: str(f.meetings), internalRows: [],
+            // Team tasks (not project tasks): listed ones + the "+ Add task" picker.
+            teamTasksEnabled: !!f.teamTasksEnabled,
+            teamTaskRows: (f.teamTasks || []).map(toTaskRow),
+            teamTaskOptions: (f.teamTaskOptions || []).map(toTaskRow),
             ...(f.sales ? { leadRows: (f.leadRows || []).map((r) => ({ lead: r.lead, kind: r.kind || 'call', note: r.note || '', next: r.next || '' })) } : {
               rows: (f.rows || []).map((r) => ({ p: r.p || '', ms: r.ms || '', h: str(r.h), note: r.note || '' })),
               pmRows: (f.pmRows || []).map((r) => ({ p: r.p, st: r.st || 'On track', note: r.note || '' })),
@@ -186,13 +205,14 @@ export const createWorkdaySlice = (set, get) => {
     async submitEndShift(m) {
       const pid = m.who;
       // Same quick checks as the server (same wording) for instant feedback.
+      const tts = taskRowsToSend(m.teamTaskRows);
       if (!m.sales) {
         const rows = (m.rows || []).filter((r) => r.p && +r.h > 0);
         const internal = (m.internalRows || []).filter((r) => +r.h > 0);
-        if (!rows.length && !internal.length) return 'Add hours for at least one project or internal work.';
+        if (!rows.length && !internal.length && !tts.some((x) => x.h > 0)) return 'Add hours for at least one project or internal work.';
         const blank = internal.findIndex((r) => !(r.note || '').trim());
         if (blank >= 0) return `Describe the internal work you did (row ${blank + 1}).`;
-        if (!m.done.trim()) return 'Write what you completed today.';
+        if (!m.done.trim() && !tts.some((x) => x.done)) return 'Write what you completed today.';
       } else {
         if (!m.outcome.trim()) return 'Write a short summary of your day.';
         const blank = (m.internalRows || []).filter((r) => +r.h > 0).findIndex((r) => !(r.note || '').trim());
@@ -208,6 +228,7 @@ export const createWorkdaySlice = (set, get) => {
           pmRows: (m.pmRows || []).map((x) => ({ p: x.p, st: x.st, note: x.note || '' })),
           internalRows: (m.internalRows || []).filter((r) => +r.h > 0).map((r) => ({ cat: r.cat || 'Other', h: +r.h || 0, note: r.note || '' })),
           leadRows: m.sales ? (m.leadRows || []).filter((r) => r.lead && ((r.note || '').trim() || r.next)).map((r) => ({ lead: r.lead, kind: r.kind || 'call', note: (r.note || '').trim(), next: r.next || '' })) : [],
+          teamTaskRows: tts,
         });
       } catch (e) {
         return e.message;
@@ -216,7 +237,8 @@ export const createWorkdaySlice = (set, get) => {
       set({ modal: null });
       // Today's time logs were replaced and a report was saved: reload logs, attendance and reports.
       // Sales rows also add lead history and follow-ups.
-      await get().resync(m.sales ? ['sales', 'workday'] : ['delivery', 'workday']).catch(() => {});
+      // Ticked team tasks were marked Done on the server: reload them too.
+      await get().resync((m.sales ? ['sales', 'workday'] : ['delivery', 'workday']).concat(tts.length ? ['teamTasks'] : [])).catch(() => {});
       get().flash(`${(res && res.message) || 'Report submitted · shift ended'} — today's work is done, see you tomorrow`);
       return undefined;
     },

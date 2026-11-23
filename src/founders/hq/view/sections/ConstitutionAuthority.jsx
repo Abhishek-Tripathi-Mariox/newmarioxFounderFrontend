@@ -224,7 +224,7 @@ export default function ConstitutionAuthority({ vm }) {
           </label>
           {' '}
           <span style={{ fontSize: '11.5px', color: 'oklch(0.55 0.012 265)' }}>
-            {'Suggested starting wording. Edit it to match what you both agree.'}
+            {'Suggested starting wording. Edit it to match what you all agree.'}
           </span>
           {' '}
         </div>

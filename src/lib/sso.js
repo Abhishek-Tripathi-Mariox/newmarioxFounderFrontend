@@ -87,18 +87,13 @@ export function landingFor(user, next) {
   return null;
 }
 
-/** The sign-in boxes (`?as=` on /login and /forgot-password). */
-export const SIGN_IN_AS = ['founders', 'team', 'partner'];
-
 /**
- * Query string carrying the sign-in context between /login and /forgot-password: the chosen box
- * (`?as=`) and a safe `?next=` from `params`, plus `extra` values that are set (e.g. email, reset).
+ * Query string carrying the sign-in context between /login and /forgot-password: a safe `?next=`
+ * from `params`, plus `extra` values that are set (e.g. email, reset). Old `?as=` values are dropped.
  */
 export function signInQuery(params, extra = {}) {
   const out = new URLSearchParams();
-  const as = params.get('as');
   const next = safeNext(params.get('next'));
-  if (SIGN_IN_AS.includes(as)) out.set('as', as);
   if (next) out.set('next', next);
   Object.entries(extra).forEach(([k, v]) => v && out.set(k, v));
   const q = out.toString();
@@ -134,28 +129,6 @@ export async function signOut() {
     // Offline or already signed out — the sign-in page is still the right place to land.
   }
   leaveTo(LOGIN_PATH);
-}
-
-/** What kind of account this is, for the sign-in boxes: 'partner' | 'founder' | 'team'. */
-export function accountKind(user) {
-  const apps = (user && user.apps) || {};
-  if (apps.portal === false && apps.partners) return 'partner';
-  if (apps.founders) return 'founder';
-  return 'team';
-}
-
-const AUDIENCE_LABEL = { partner: 'Partner', founder: 'Founder / Co-founder', team: 'Team' };
-const ACCOUNT_NAME = { partner: 'a partner account', founder: 'a Founder / Co-founder account', team: 'a team account' };
-
-/**
- * Null when `user` may sign in through the chosen box (`audience`: 'founders' | 'team' | 'partner'),
- * else the message telling them which box to use. Founders may also use Team (they are staff too).
- */
-export function audienceMismatch(user, audience) {
-  if (!audience) return null;
-  const kind = accountKind(user);
-  const fits = audience === 'founders' ? kind === 'founder' : audience === 'partner' ? kind === 'partner' : kind !== 'partner';
-  return fits ? null : `This is ${ACCOUNT_NAME[kind]}. Please log in as ${AUDIENCE_LABEL[kind]}.`;
 }
 
 /**

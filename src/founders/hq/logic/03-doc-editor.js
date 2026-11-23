@@ -3,8 +3,8 @@ import HQGoalsDecisionsReview from './02-goals-decisions-review';
 import { uid, MUTED, TYPES, BST, SHORT, mdToBlocks } from './core';
 
 /*
- * Block editor shared by Docs pages and goal notes.
- * A "doc id" is either a page id, or 'goal:<id>' for the notes on a goal.
+ * Block editor shared by Docs pages, My tasks notes and goal notes.
+ * A "doc id" is either a page id, or 'task:<id>' / 'goal:<id>' for the notes on a founder task or goal.
  */
 export default class HQDocEditor extends HQGoalsDecisionsReview {
   /** Add a blank hiring role (in `stage`, default 'Planned') and open it in the peek panel. */
@@ -23,8 +23,13 @@ export default class HQDocEditor extends HQGoalsDecisionsReview {
     this.setState({ peek: id });
   }
 
-  /** The doc for `docId`; goals without notes get a single empty paragraph (not saved). */
+  /** The doc for `docId`; tasks and goals without notes get a single empty paragraph (not saved). */
   getDoc(docId) {
+    if (docId.startsWith('task:')) {
+      const task = this.state.data.tasks.find(candidate => 'task:' + candidate.id === docId);
+      if (!task) return null;
+      return { id: docId, blocks: task.blocks && task.blocks.length ? task.blocks : [{ id: task.id + '-b0', type: 'p', text: '', checked: false }] };
+    }
     if (docId.startsWith('goal:')) {
       const goal = this.state.data.goals.find(candidate => 'goal:' + candidate.id === docId);
       if (!goal) return null;
@@ -37,8 +42,8 @@ export default class HQDocEditor extends HQGoalsDecisionsReview {
   updPage(docId, mutate) {
     this.upd(data => {
       let doc;
-      if (docId.startsWith('goal:')) {
-        doc = data.goals.find(item => docId.slice(5) === item.id);
+      if (docId.startsWith('task:') || docId.startsWith('goal:')) {
+        doc = (docId.startsWith('goal:') ? data.goals : data.tasks).find(item => docId.slice(5) === item.id);
         // Persist the placeholder paragraph that getDoc() shows for empty notes.
         if (doc && !(doc.blocks && doc.blocks.length)) doc.blocks = [{ id: doc.id + '-b0', type: 'p', text: '', checked: false }];
       } else doc = data.pages.find(page => page.id === docId);
@@ -79,7 +84,7 @@ export default class HQDocEditor extends HQGoalsDecisionsReview {
       const style = BST[block.type] || BST.p, done = block.type === 'todo' && block.checked;
       const lineHeightPx = parseFloat(style.fs) * parseFloat(style.lh) + 6;
       const placeholder = block.type === 'p'
-        ? "Type '/' for blocks"
+        ? (docId.startsWith('task:') ? "Write details, plans, links… or type '/'" : "Type '/' for blocks")
         : (TYPES.find(type => type[0] === block.type) || [undefined, ''])[1];
       return {
         id: block.id, text: block.text || '',

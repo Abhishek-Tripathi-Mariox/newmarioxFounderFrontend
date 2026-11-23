@@ -194,7 +194,7 @@ export default function Constitution({ vm }) {
         {' '}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '13px', color: 'oklch(0.48 0.012 265)', flex: '1', minWidth: '240px' }}>
-            {'A temporary deviation from a rule, approved by both founders, with an expiry date.'}
+            {'A temporary deviation from a rule, approved by all founders, with an expiry date.'}
           </div>
           <div style={{
               display: 'flex',

@@ -24,10 +24,10 @@ export const SUPER_ROLE = 'r-super';
 /** Partners (docs/SSO.md): locked, no portal permissions; managed from the Partners admin console. */
 export const PARTNER_ROLE = 'r-partner';
 
-/** Founders HQ seats a Super Admin can give (labels as Founders HQ shows them). */
-export const HQ_SEATS = [
-  ['rahul', 'Founder seat'],
-  ['saswat', 'Co-founder seat'],
+/** Founders HQ access a Super Admin can give: any number of Founders and Co-founders (docs/SSO.md). */
+export const HQ_ROLES = [
+  ['founder', 'Founder'],
+  ['cofounder', 'Co-founder'],
 ];
 
 /** Super Admin accounts and your own account can't be previewed, deactivated or deleted from the list. */
@@ -55,8 +55,11 @@ export const isDeliveryRole = (roleId, role) => {
 export function roleSummary(role) {
   if (!role) return '';
   if (role.id === PARTNER_ROLE) return 'Partner portal only · no access to the team portal';
-  const v = MODULES.filter(([k]) => role.perms?.[k]?.v).map((m) => m[1]);
-  return v.length ? `Can open: ${v.join(', ')}` : 'No modules enabled';
+  const on = MODULES.filter(([k]) => role.perms?.[k]?.v);
+  const portal = on.filter(([k]) => !k.startsWith('pp_')).map((m) => m[1]);
+  const partners = on.filter(([k]) => k.startsWith('pp_')).map((m) => m[1]);
+  const parts = [portal.length ? `Can open: ${portal.join(', ')}` : '', partners.length ? `Partner portal: ${partners.join(', ')}` : ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'No modules enabled';
 }
 
 const statusRank = (s) => USER_STATUSES.indexOf(s);

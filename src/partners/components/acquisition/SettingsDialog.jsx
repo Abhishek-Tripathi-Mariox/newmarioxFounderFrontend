@@ -15,7 +15,8 @@ const LISTS = [
 ];
 
 // Lists the team picks from, team emails for calendar invites, plus import / export and sample data.
-export function SettingsDialog({ lists, emails, leads, Q, onClose, onChanged, onListsSaved, onEmailsSaved, onImport }) {
+// `can(act)`: what the admin's role may do in Acquisition (lists / emails = Edit, import / samples = Create, clear samples = Delete).
+export function SettingsDialog({ lists, emails, leads, Q, onClose, onChanged, onListsSaved, onEmailsSaved, onImport, can = () => true }) {
   const [draft, setDraft] = useState(lists);
   const [mails, setMails] = useState(emails);
   const [error, setError] = useState(null);
@@ -75,6 +76,7 @@ export function SettingsDialog({ lists, emails, leads, Q, onClose, onChanged, on
   return (
     <Modal className="acq" open wide title="Settings" onClose={onClose}>
       <div className="stack" style={{ gap: 10, marginTop: 14 }}>
+        <fieldset disabled={!can('e')} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, gap: 10 }} className="stack">
         {LISTS.map(([k, t]) => <ListCard key={k} title={t} values={draft[k]} onRemove={i => remove(k, i)} onAdd={v => addTo(k, v)} />)}
         <div className="card flat tight">
           <div className="lbl" style={{ marginBottom: 8 }}>Team emails · for calendar invites</div>
@@ -89,15 +91,16 @@ export function SettingsDialog({ lists, emails, leads, Q, onClose, onChanged, on
             ))}
           </div>
         </div>
+        </fieldset>
         <div className="card flat tight">
           <div className="lbl" style={{ marginBottom: 8 }}>Data</div>
           <div className="row wrap" style={{ gap: 6 }}>
-            <Button size="sm" icon="upload" onClick={onImport}>Import CSV / Excel</Button>
+            {can('c') && <Button size="sm" icon="upload" onClick={onImport}>Import CSV / Excel</Button>}
             <Button size="sm" icon="download" onClick={exportXlsx}>Export Excel</Button>
             {samples ? (
-              <Button size="sm" variant="fire" icon="trash" loading={busy} onClick={() => sample('clear')}>Clear {samples} sample leads</Button>
+              can('d') && <Button size="sm" variant="fire" icon="trash" loading={busy} onClick={() => sample('clear')}>Clear {samples} sample leads</Button>
             ) : (
-              <Button size="sm" variant="ghost" loading={busy} onClick={() => sample('load')}>Load sample leads</Button>
+              can('c') && <Button size="sm" variant="ghost" loading={busy} onClick={() => sample('load')}>Load sample leads</Button>
             )}
           </div>
         </div>

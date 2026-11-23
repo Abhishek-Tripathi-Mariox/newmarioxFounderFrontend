@@ -4,7 +4,7 @@ import { Modal, Field, Input, Select, Checkbox, Button, ErrorText } from '@/comp
 import { RED } from '@/lib/color';
 import { ago, today, ymd } from '@/lib/date';
 import {
-  DEPARTMENTS, HQ_SEATS, MANAGER_ROLES, PARTNER_ROLE, ROLE_DEPT, SUPER_ROLE, isProtectedUser,
+  DEPARTMENTS, HQ_ROLES, MANAGER_ROLES, PARTNER_ROLE, ROLE_DEPT, SUPER_ROLE, isProtectedUser,
   checkedOf, isDeliveryRole, roleSummary, valueOf,
 } from './users.utils';
 import s from './UserModal.module.css';
@@ -15,14 +15,14 @@ const OK_TEXT = 'oklch(0.42 0.12 150)';
 
 /**
  * Initial form — same fields as the original `openUser()` modal state. New users report to
- * `defaultManager`. `withSeat` adds the Founders HQ seat field (edit, Super Admin only).
+ * `defaultManager`. `withSeat` adds the Founders HQ access field (edit, Super Admin only).
  */
 function initialForm(user, defaultManager = '', withSeat = false) {
   if (user) {
     return {
       name: user.name, email: user.email, phone: user.phone || '', title: user.title || '', role: user.role,
       dept: user.dept || 'Web', reports: user.reports || '', join: user.join ? ymd(user.join) : '', shift: String(user.shift || 8),
-      ...(withSeat ? { hqSeat: user.hqSeat || '' } : {}),
+      ...(withSeat ? { hqRole: user.hqRole || (user.hqSeat ? (user.hqSeat === 'rahul' ? 'founder' : 'cofounder') : '') } : {}),
     };
   }
   return {
@@ -64,12 +64,12 @@ export default function UserModal({ editId, onClose }) {
     () => roles.filter((r) => r.id !== PARTNER_ROLE || isPartner).map((r) => ({ value: r.id, label: r.name })),
     [roles, isPartner],
   );
-  /** Seats are unique: one already held by someone else is shown but can't be picked. */
+  /** Founders HQ access: None, Founder or Co-founder (any number of each; the count shows how many have it). */
   const seatOptions = useMemo(() => [
     { value: '', label: 'None' },
-    ...HQ_SEATS.map(([value, label]) => {
-      const holder = users.find((u) => u.id !== editId && u.hqSeat === value);
-      return { value, label: holder ? `${label} · ${holder.name}` : label, disabled: !!holder };
+    ...HQ_ROLES.map(([value, label]) => {
+      const others = users.filter((u) => u.id !== editId && u.hqSeat && (u.hqRole || (u.hqSeat === 'rahul' ? 'founder' : 'cofounder')) === value).length;
+      return { value, label: others ? `${label} · ${others} other${others === 1 ? '' : 's'}` : label };
     }),
   ], [users, editId]);
   const deptOptions = DEPARTMENTS.map((d) => ({ value: d, label: d }));
@@ -190,12 +190,12 @@ export default function UserModal({ editId, onClose }) {
         {showSeat && (
           <>
             <Field label="Founders HQ access">
-              <Select value={form.hqSeat} onChange={set('hqSeat')} options={seatOptions} />
+              <Select value={form.hqRole} onChange={set('hqRole')} options={seatOptions} />
             </Field>
             <div className={s.deliveryNote}>
-              {form.hqSeat && form.role !== SUPER_ROLE
+              {form.hqRole && form.role !== SUPER_ROLE
                 ? 'Founders and co-founders are normally Super Admins — change the role too.'
-                : 'A seat opens Founders HQ with this account. Only Super Admins can change it.'}
+                : 'Founders HQ access opens Founders HQ with this account (any number of founders and co-founders). Only Super Admins can change it.'}
             </div>
           </>
         )}

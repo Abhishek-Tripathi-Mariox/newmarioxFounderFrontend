@@ -23,6 +23,11 @@ export const hasTeam = (me) => {
   const p = me && !isCeo(me) && me.role && me.role.perms && me.role.perms.att;
   return !!(p && p.v && p.scope !== 'own');
 };
+/** "Attendance & reports" Edit: may check the people in their scope in / out (their live state comes from /live/state). */
+export const attEdit = (me) => {
+  const p = me && !isCeo(me) && me.role && me.role.perms && me.role.perms.att;
+  return !!(p && p.e);
+};
 const isStaff = (me) => !!me && !!me.pid && !(me.role && me.role.id === 'r-client');
 
 const num = (x) => (x == null ? 0 : Number(x) || 0);
@@ -70,7 +75,9 @@ export function fromApiReport(r) {
     meetings: num(r.meetings),
     rows: (r.rows || []).map((x) => ({ p: x.p, ms: x.ms || null, h: num(x.h), note: x.note || '' })),
     pm: (r.pm || r.pmRows || []).map((x) => ({ p: x.p, st: x.st, note: x.note || '' })),
-    internal: (r.internal || r.internalRows || []).map((x) => ({ cat: x.cat || 'Other', h: num(x.h), note: x.note || '' })),
+    internal: (r.internal || r.internalRows || []).map((x) => ({ cat: x.cat || 'Other', h: num(x.h), note: x.note || '', ...(x.tt ? { tt: x.tt } : {}) })),
+    // Team tasks reported (done = completed in this report; to = where the hours went: 'timesheet' | 'internal' | null).
+    teamTasks: (r.teamTasks || []).map((x) => ({ id: x.id, title: x.title || x.id, done: !!x.done, h: num(x.h), note: x.note || '', p: x.p || null, to: x.to || null })),
     leadRows: (r.leadRows || []).map((x) => ({ lead: x.lead, company: x.company || x.lead, kind: x.kind || 'call', note: x.note || '', next: x.next || '' })),
   };
 }
@@ -82,7 +89,7 @@ const range = (from, to) => ({ from: toDay(from), to: toDay(to) });
 
 /** Today's live board for the caller (CEO: everyone). */
 export async function fetchLive(me) {
-  return fromApiLive(await api.get(isCeo(me) ? '/live/state' : '/workday/state'));
+  return fromApiLive(await api.get(isCeo(me) || attEdit(me) ? '/live/state' : '/workday/state'));
 }
 
 /** Attendance events in [from, to] (local day ms). CEO: everyone; staff: their own (person is forced). */

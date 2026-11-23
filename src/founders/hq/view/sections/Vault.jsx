@@ -75,7 +75,7 @@ export default function Vault({ vm }) {
         </div>
         {' '}
         <div style={{ fontSize: '13px', color: 'oklch(0.52 0.012 265)', lineHeight: '1.5' }}>
-          {'Share it only with your co-founder. If it\'s forgotten, saved credentials can\'t be recovered.'}
+          {'Share it only with your fellow founders. If it\'s forgotten, saved credentials can\'t be recovered.'}
         </div>
         {' '}
         <input type="password" value={inputValue(vm.vt?.pw)} onChange={vm.vt?.onPw} placeholder="Master password (8+ characters)" style={{

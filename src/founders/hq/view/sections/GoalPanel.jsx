@@ -546,7 +546,7 @@ export default function GoalPanel({ vm }) {
             {' '}
             {vm.gp?.noCheckins ? (<>
               <div style={{ fontSize: '13px', color: 'oklch(0.52 0.012 265)' }}>
-                {'Post a quick update each week so you both see how it\'s going.'}
+                {'Post a quick update each week so every founder sees how it\'s going.'}
               </div>
             </>) : null}
             {' '}

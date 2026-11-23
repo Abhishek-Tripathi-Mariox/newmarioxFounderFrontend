@@ -12,6 +12,7 @@ import { date, inr, short } from '@/partners/lib/format';
 import { earnings, pipeline } from '@/partners/lib/metrics';
 
 import { R } from '@/partners/lib/validate';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 
 const EDIT_FIELDS = [
   { name: 'name', label: 'Full name', required: true, rule: R.person },
@@ -34,16 +35,22 @@ export default function PartnerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const can = usePpCan();
+  // Each tab needs its own section's View (the API refuses the rest).
+  const seeLeads = can('pp_leads');
+  const seeProjects = can('pp_projects');
+  const seeReqs = can('pp_requests');
+  const mayEdit = can('pp_partners', 'e');
   const { data, setData } = useApi(`/admin/users/${id}`);
-  const leads = useApi(`/leads?owner=${id}`);
-  const projects = useApi(`/projects?owner=${id}`);
+  const leads = useApi(seeLeads ? `/leads?owner=${id}` : null);
+  const projects = useApi(seeProjects ? `/projects?owner=${id}` : null);
   const reqs = {
-    scope: useApi(`/requests/scope?owner=${id}`),
-    booking: useApi(`/requests/booking?owner=${id}`),
-    tech: useApi(`/requests/tech?owner=${id}`),
-    ticket: useApi(`/requests/ticket?owner=${id}`),
+    scope: useApi(seeReqs ? `/requests/scope?owner=${id}` : null),
+    booking: useApi(seeReqs ? `/requests/booking?owner=${id}` : null),
+    tech: useApi(seeReqs ? `/requests/tech?owner=${id}` : null),
+    ticket: useApi(seeReqs ? `/requests/ticket?owner=${id}` : null),
   };
-  const [tab, setTab] = useState('leads');
+  const [tabPicked, setTab] = useState(null);
   const [editing, setEditing] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -71,20 +78,26 @@ export default function PartnerDetailPage() {
   }
 
   const suspended = u.status === 'disabled';
+  const tabs = [
+    seeLeads && { value: 'leads', label: 'Leads', count: leads.data?.leads.length },
+    seeProjects && { value: 'projects', label: 'Projects', count: mine.length },
+    seeReqs && { value: 'requests', label: 'Requests', count: myReqs.length },
+  ].filter(Boolean);
+  const tab = tabPicked ?? tabs[0]?.value;
 
   return (
     <>
       <div className="row wrap" style={{ gap: 8 }}>
         <Link className="more" to="/partners/admin/partners"><Icon name="chevL" size="s" />All partners</Link>
         <span className="spacer" />
-        <Button size="sm" icon="note" onClick={() => setEditing(true)}>Edit details</Button>
-        <Button size="sm" icon="shield" onClick={() => setPwOpen(true)}>Set password</Button>
-        {suspended ? (
+        {mayEdit && <Button size="sm" icon="note" onClick={() => setEditing(true)}>Edit details</Button>}
+        {mayEdit && <Button size="sm" icon="shield" onClick={() => setPwOpen(true)}>Set password</Button>}
+        {!mayEdit ? null : suspended ? (
           <Button size="sm" variant="good" icon="check" onClick={() => patch({ status: 'active' }, 'Partner reactivated')}>Reactivate</Button>
         ) : (
           <Button size="sm" variant="danger" icon="alert" onClick={() => confirm(`Suspend ${u.name}? They are signed out at once and can't log in.`) && patch({ status: 'disabled' }, 'Partner suspended')}>Suspend</Button>
         )}
-        <Button size="sm" variant="danger" icon="trash" onClick={() => setDeleting(true)}>Delete</Button>
+        {can('pp_partners', 'd') && <Button size="sm" variant="danger" icon="trash" onClick={() => setDeleting(true)}>Delete</Button>}
       </div>
 
       <div className="ccard" style={{ ['--glow']: `hsla(${hue(u.name)},70%,55%,.55)`, padding: 26 }}>
@@ -111,28 +124,22 @@ export default function PartnerDetailPage() {
         </div>
       </div>
 
-      <Stats>
-        <StatCard icon="pipe" tone="fire" label="Open pipeline" value={short(pipe.openValue)} hint={`${pipe.open} leads`} onClick={() => setTab('leads')} active={tab === 'leads'}
-          info="This partner's leads that are not Won or Lost." />
-        <StatCard icon="trophy" tone="good" label="Deals won" value={short(pipe.wonValue)} hint={`${pipe.won} won · ${pipe.winRate}% win rate`} onClick={() => setTab('leads')}
-          info="Won leads. Win rate = Won ÷ (Won + Lost)." />
-        <StatCard icon="check" tone="good" label="Commission released" value={inr(m.released)} hint={`${mine.length} projects`} good onClick={() => setTab('projects')} active={tab === 'projects'}
-          info={`Received client payments with payout released × ${Math.round(u.commissionRate * 100)}%.`} />
-        <StatCard icon="refresh" tone="warn" label="Pending payout" value={inr(m.processing)} hint="Client paid, not yet released" onClick={() => setTab('projects')}
-          info="Client has paid Mariox but the partner's commission is not released yet. Release it from the project's payment schedule." />
-      </Stats>
+      {(seeLeads || seeProjects) && <Stats>
+        {seeLeads && <StatCard icon="pipe" tone="fire" label="Open pipeline" value={short(pipe.openValue)} hint={`${pipe.open} leads`} onClick={() => setTab('leads')} active={tab === 'leads'}
+          info="This partner's leads that are not Won or Lost." />}
+        {seeLeads && <StatCard icon="trophy" tone="good" label="Deals won" value={short(pipe.wonValue)} hint={`${pipe.won} won · ${pipe.winRate}% win rate`} onClick={() => setTab('leads')}
+          info="Won leads. Win rate = Won ÷ (Won + Lost)." />}
+        {seeProjects && <StatCard icon="check" tone="good" label="Commission released" value={inr(m.released)} hint={`${mine.length} projects`} good onClick={() => setTab('projects')} active={tab === 'projects'}
+          info={`Received client payments with payout released × ${Math.round(u.commissionRate * 100)}%.`} />}
+        {seeProjects && <StatCard icon="refresh" tone="warn" label="Pending payout" value={inr(m.processing)} hint="Client paid, not yet released" onClick={() => setTab('projects')}
+          info="Client has paid Mariox but the partner's commission is not released yet. Release it from the project's payment schedule." />}
+      </Stats>}
 
-      <div>
-        <Tabs
-          tabs={[
-            { value: 'leads', label: 'Leads', count: leads.data?.leads.length },
-            { value: 'projects', label: 'Projects', count: mine.length },
-            { value: 'requests', label: 'Requests', count: myReqs.length },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
-      </div>
+      {tabs.length > 0 && (
+        <div>
+          <Tabs tabs={tabs} value={tab} onChange={setTab} />
+        </div>
+      )}
 
       {tab === 'leads' && <PipelineView admin partnerId={id} />}
       {tab === 'projects' && <ProjectList ownerId={id} rate={u.commissionRate} />}

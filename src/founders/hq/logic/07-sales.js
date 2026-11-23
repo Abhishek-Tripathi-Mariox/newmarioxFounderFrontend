@@ -1,6 +1,6 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import HQWeeklyRhythm from './06-weekly-rhythm';
-import { PEOPLE, COS, coOf, segOf, PARTNER_DEF, PARTNER_ROWS, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, act, goalCalc, CT_TYPES, CT_ST, AI_ON } from './core';
+import { PEOPLE, MEMBERS, memberOpts, teamLine, COS, coOf, segOf, PARTNER_DEF, PARTNER_ROWS, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, act, goalCalc, CT_TYPES, CT_ST, AI_ON } from './core';
 import { newLeadInHQ, noteOnLead, openLeadInHQ, searchLeadsInHQ } from '../leads/hqLeads';
 
 const DAY_MS = 864e5;
@@ -71,7 +71,7 @@ export default class HQSales extends HQWeeklyRhythm {
           go: () => setCompany(tabId),
         };
       });
-    const ownerOptions = [['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first], ['both', 'Both']];
+    const ownerOptions = memberOpts().map(([id, label]) => [id, label]);
 
     // ---------- contracts
     const contracts = data.contracts || [];
@@ -381,7 +381,7 @@ export default class HQSales extends HQWeeklyRhythm {
     const whoPerson = person(who);
     const hour = now.getHours();
     const isMonday = now.getDay() === 1;
-    // Team tasks for `who` that are due or late: mine = assigned to / given by me; the other founder's =
+    // Team tasks for `who` that are due or late: mine = assigned to / given by me; another founder's =
     // assigned to / given by someone with their account name.
     const isTheirs = task => (who === me ? task.mine : [task.assignee, task.giver].includes(whoPerson.name));
     const myTasks = this.tasksAll()
@@ -538,7 +538,7 @@ export default class HQSales extends HQWeeklyRhythm {
       sub: todo.length
         ? plural(todo.length, ' thing needs', ' things need') + ' you today · ' + plural(risks.length, ' risk', ' risks') + ' to watch'
         : 'Nothing urgent today · ' + plural(risks.length, ' risk', ' risks') + ' to watch',
-      whoSeg: segOf([['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first]], who, founder => setUi({ csWho: founder })),
+      whoSeg: segOf(memberOpts(false), who, founder => setUi({ csWho: founder })),
       write: () => this.csWrite(facts, who),
       writeLbl: state.csBusy ? 'Writing…' : todayBrief ? '✦ Rewrite brief' : '✦ Write my brief',
       pulse: [
@@ -703,7 +703,7 @@ export default class HQSales extends HQWeeklyRhythm {
     const today = iso(new Date());
     const companyName = id => (coOf(id) || {}).name || id;
     const lines = [];
-    lines.push('TODAY ' + today + ' · user ' + (PEOPLE[me] || PEOPLE.rahul).name + ' · current page ' + this.state.view);
+    lines.push('TODAY ' + today + ' · user ' + (PEOPLE[me] || PEOPLE.both).name + ' (person id ' + me + ')' + ' · current page ' + this.state.view);
     lines.push('COMPANIES (id = name): '
       + COS.map(company => company.id + ' = ' + company.name + ' (' + (company.country || '') + ', ' + (company.status || '') + ')').join('; ')
       + '; all = Founders/group');
@@ -789,17 +789,17 @@ export default class HQSales extends HQWeeklyRhythm {
     });
     this.setState({ aiQ: '', aiBusy: true, aiErr: '' });
     const prompt = [
-      'You are Founders AI, the assistant inside Founders HQ, the private command centre of Rahul Garg (Founder) and Saswat Sahu (Co-founder). They run several companies from one portal.',
+      'You are Founders AI, the assistant inside Founders HQ, the private command centre of ' + teamLine() + '. They run several companies from one portal.',
       'Use ONLY the portal data below. If something is not in the data, say so. Be concise, direct and practical. Use Indian number style for money (lakh, crore).',
       'Reply with ONLY a JSON object, no code fences: {"reply": string, "actions": array}.',
       '"reply": plain text answer, under 160 words, short lines, no markdown symbols. Put long drafts (emails, job descriptions, SOPs) in a copy or doc action instead of the reply.',
       '"actions": optional suggestions the user can approve. Allowed types:',
-      '{"type":"task","title":string,"co":companyId,"owner":"rahul"|"saswat"|"both","due":"YYYY-MM-DD","pri":"High"|"Medium"|"Low"}',
+      '{"type":"task","title":string,"co":companyId,"owner":personId|"both","due":"YYYY-MM-DD","pri":"High"|"Medium"|"Low"}  (person ids: ' + MEMBERS.map(id => id + ' = ' + PEOPLE[id].name).join(', ') + '; "both" = all founders)',
       '{"type":"decision","title":string,"co":companyId}',
       '{"type":"deal","name":string,"acct":string,"co":companyId,"value":number}  (a new sales lead; acct = the client company)',
       '{"type":"goal","title":string,"co":companyId,"target":"YYYY-MM-DD"}',
       '{"type":"subtasks","taskId":id,"items":[string]}  (adds checklist items to an existing task)',
-      '{"type":"update_task","taskId":id,"due":"YYYY-MM-DD","owner":"rahul"|"saswat","pri":"High"|"Medium"|"Low","status":"Not started"|"In progress"|"Done"}  (any subset)',
+      '{"type":"update_task","taskId":id,"due":"YYYY-MM-DD","owner":personId,"pri":"High"|"Medium"|"Low","status":"Not started"|"In progress"|"Done"}  (any subset)',
       '{"type":"note","kind":"task"|"decision"|"deal","id":id,"text":string}  (adds a note or comment; for a lead use kind "deal" and the lead id)',
       '{"type":"option","decisionId":id,"text":string,"notes":string}  (adds an option with pros and cons to a decision)',
       '{"type":"metric","co":companyId,"name":string,"unit":"#"|"₹"|"%","dir":"up"|"down","goal":number}  (adds a weekly scorecard metric)',
@@ -853,7 +853,7 @@ export default class HQSales extends HQWeeklyRhythm {
     // Copy actions can be run again; everything else only while pending.
     if (!action || (action.state !== 'pending' && action.type !== 'copy')) return;
     const companyId = action.co && (COS.some(company => company.id === action.co) || action.co === 'all') ? action.co : (COS[0] || {}).id || 'all';
-    const owner = ['rahul', 'saswat', 'both'].includes(action.owner) ? action.owner : me;
+    const owner = [...MEMBERS, 'both'].includes(action.owner) ? action.owner : me;
     if (action.type === 'goto') {
       this.setState({ aiOpen: false });
       this.go(action.view || 'home');

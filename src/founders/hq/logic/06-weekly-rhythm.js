@@ -2,7 +2,7 @@
 import React from 'react';
 import HQConstitution from './05-constitution';
 import { setTeamTaskDue } from '../teamTasks/hqTeamTasks';
-import { PEOPLE, COS, coOf, segOf, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, act, goalCalc, SC_SUGG, SY_STEPS, SyncClock } from './core';
+import { PEOPLE, MEMBERS, memberOpts, COS, coOf, segOf, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, act, goalCalc, SC_SUGG, SY_STEPS, SyncClock } from './core';
 
 const DAY_MS = 864e5;
 
@@ -16,7 +16,8 @@ export default class HQWeeklyRhythm extends HQConstitution {
     const { me, data } = state;
     const setUi = patch => this.setState(patch);
     const person = id => PEOPLE[id] || PEOPLE.both;
-    const founders = ['rahul', 'saswat'];
+    // Every current founder / co-founder (a live list: core.applyAccountNames keeps it up to date).
+    const founders = MEMBERS;
     const now = new Date();
     const todayStart = new Date(iso(now) + 'T00:00:00').getTime();
     const dayStart = isoDate => isoDate ? new Date(isoDate + 'T00:00:00').getTime() : 0;
@@ -244,7 +245,7 @@ export default class HQWeeklyRhythm extends HQConstitution {
             src: selectProps(metric.src || 'manual', event => updateMetric(metric.id, item => { item.src = event.target.value; }),
               [['manual', 'Enter weekly'], ['tasks_done', 'Auto: tasks done'], ['tasks_slipped', 'Auto: tasks slipped'], ['decisions', 'Auto: decisions made']]),
             owner: selectProps(metric.owner || me, event => updateMetric(metric.id, item => { item.owner = event.target.value; }),
-              [['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first], ['both', 'Both']]),
+              memberOpts().map(([id, label]) => [id, label])),
             // Move up: swap with the closest earlier metric of the same company.
             up: () => updateScore(scoreDraft => {
               const position = scoreDraft.metrics.findIndex(item => item.id === metric.id);
@@ -356,7 +357,7 @@ export default class HQWeeklyRhythm extends HQConstitution {
         agenda: SY_STEPS.map(([name, minutes, desc], stepIndex) => ({ n: String(stepIndex + 1), name, desc, min: minutes + ' min' })),
         past: syncs.slice(0, 12).map(sync => {
           const open = state.syOpen === sync.id;
-          const ratings = founders.map(founder => (sync.ratings || {})[founder]).filter(Boolean);
+          const ratings = Object.values(sync.ratings || {}).filter(Boolean); // everyone who rated, members then or now
           const avg = ratings.length ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) : null;
           const minutes = Math.round(((sync.ended || sync.started) - sync.started) / 60000);
           const solved = (sync.issues || []).filter(issue => issue.status === 'solved').length;
@@ -369,7 +370,7 @@ export default class HQWeeklyRhythm extends HQConstitution {
             open,
             caret: open ? '▼' : '▶',
             toggle: () => setUi({ syOpen: open ? null : sync.id }),
-            wins: founders
+            wins: Object.keys(sync.wins || {})
               .filter(founder => ((sync.wins || {})[founder] || '').trim())
               .map(founder => ({ who: person(founder).first, text: sync.wins[founder] })),
             issues: (sync.issues || []).map(issue => ({
@@ -559,8 +560,8 @@ export default class HQWeeklyRhythm extends HQConstitution {
                 issueDraft.status = solved ? 'open' : 'solved';
                 if (solved) issueDraft.out = '';
               }),
-              taskR: () => issueToTask(issue, 'rahul'),
-              taskS: () => issueToTask(issue, 'saswat'),
+              // One "→ Task for <name>" button per founder / co-founder.
+              taskFor: founders.map(founder => ({ label: '→ Task for ' + person(founder).first, go: () => issueToTask(issue, founder) })),
               dec: () => issueToDecision(issue),
               remove: () => updateLive(liveDraft => { liveDraft.issues = liveDraft.issues.filter(item => item.id !== issue.id); }),
             };
@@ -618,11 +619,12 @@ export default class HQWeeklyRhythm extends HQConstitution {
       return;
     }
     this.setState({ csBusy: true, csNote: 'Writing your brief…' });
-    const founder = PEOPLE[who] || PEOPLE.rahul;
+    const founder = PEOPLE[who] || PEOPLE.both;
+    const partners = MEMBERS.filter(id => id !== who).map(id => PEOPLE[id].name + ' (' + PEOPLE[id].role + ')');
     const isMonday = new Date().getDay() === 1;
     const prompt = [
-      'You are the chief of staff for ' + founder.name + ' (' + founder.role + '). Together with '
-        + (who === 'rahul' ? PEOPLE.saswat : PEOPLE.rahul).name + ' (' + (who === 'rahul' ? PEOPLE.saswat : PEOPLE.rahul).role + ')'
+      'You are the chief of staff for ' + founder.name + ' (' + (founder.role || 'Founder') + ').'
+        + (partners.length ? ' Together with ' + partners.join(', ') : '')
         + ' they run Mariox Software, HROO, Arth and other companies from India.',
       'Write a ' + (isMonday ? 'Monday weekly brief' : 'daily brief') + ' for ' + founder.first + ' using ONLY the facts below. Do not invent numbers or names.',
       'Format, plain text, no markdown symbols:',

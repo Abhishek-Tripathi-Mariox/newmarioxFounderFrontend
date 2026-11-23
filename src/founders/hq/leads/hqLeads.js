@@ -23,8 +23,8 @@ const ymd = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.g
 
 /**
  * One portal lead in HQ's shape: { id, name (client company), acct, contact, email, phone, co, value,
- * stage (portal stage), open, won, lost, owner (name), ownerId, seat ('rahul' | 'saswat' | null: the
- * founder who owns it), source, services, next / nextDate / nextAt (earliest open follow-up), created,
+ * stage (portal stage), open, won, lost, owner (name), ownerId, seat (HQ person id of the
+ * founder who owns it, or null), source, services, next / nextDate / nextAt (earliest open follow-up), created,
  * updated (last activity), wonAt }.
  */
 function toHQLead(l, { ownerName, seatOf, nextOf }) {

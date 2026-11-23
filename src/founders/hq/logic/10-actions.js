@@ -1,38 +1,51 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import HQTasksHiringDocs from './09-tasks-hiring-docs';
 import { fetchVault, saveVault } from '@/founders/api/vault';
-import { fetchSummary } from '@/founders/summary/api/summary';
+import { fetchSummary } from '@/founders/api/summary';
 import { createTeamTask, openNewTeamTaskHere } from '../teamTasks/hqTeamTasks';
 import { setTasksCompany } from '../teamTasks/portalBridge';
 import { useStore } from '@/store';
-import { PEOPLE, PORTAL_URLS, COS, coOf, deriveKey, seal, unseal, idb, parseCSV, toIso, guessCo, fmtSize, iso, dayDiff, uid, RED, AMBER, GREEN, MUTED, mdToBlocks } from './core';
+import { PEOPLE, ALL_FOUNDERS, PORTAL_URLS, COS, coOf, deriveKey, seal, unseal, idb, parseCSV, toIso, guessCo, fmtSize, iso, dayDiff, uid, RED, AMBER, GREEN, MUTED, mdToBlocks } from './core';
 
 export default class HQActions extends HQTasksHiringDocs {
   /**
-   * View model for the Calendar page: a Monday-first month grid of the founder's due team tasks (assigned
-   * to or given by them) plus the selected-day panel; "+ New task" opens the full form for that day.
+   * View model for the Calendar page: a Monday-first month grid of the founder's due tasks — team tasks
+   * (assigned to or given by them) and their own founder tasks (My tasks: theirs or shared) — plus the
+   * selected-day panel. Show tabs pick both kinds or one; "+ Team task" opens the full team task form
+   * and "+ My task" adds a founder task for the selected day and opens its task page.
    */
   calVM() {
     const state = this.state, update = patch => this.setState(patch), today = iso(new Date());
-    const selectedDay = state.calSel || today, companyFilter = state.calCo || 'all';
+    const selectedDay = state.calSel || today, companyFilter = state.calCo || 'all', kind = state.calKind || 'all';
+    const me = state.me;
 
     // Month grid: blank cells before the 1st (Monday-first), then enough whole weeks to cover the month.
     const [year, month] = (state.calM || today.slice(0, 7)).split('-').map(Number), monthIndex = month - 1;
     const leadingDays = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
     const weekCount = Math.ceil((leadingDays + new Date(year, monthIndex + 1, 0).getDate()) / 7);
 
+    // Team tasks assigned to or given by me (none until they have loaded) and my founder tasks.
+    const teamDated = this.myTasks().filter(task => task.due).map(task => ({ ...task, kind: 'team' }));
+    const mineDated = (state.data.tasks || [])
+      .filter(task => task.due && (task.owner === me || task.owner === 'both'))
+      .map(task => ({ ...task, kind: 'mine' }));
+    const ofKind = k => (k === 'team' ? teamDated : k === 'mine' ? mineDated : teamDated.concat(mineDated));
     const matchesCompany = task => companyFilter === 'all' || task.co === companyFilter;
-    // Team tasks assigned to or given by me (done ones struck through). None until they have loaded.
-    const myDated = this.myTasks().filter(task => task.due);
-    const datedTasks = myDated.filter(matchesCompany), tasksByDay = {};
+    const datedTasks = ofKind(kind).filter(matchesCompany), tasksByDay = {};
     datedTasks.forEach(task => (tasksByDay[task.due] = tasksByDay[task.due] || []).push(task));
     // Within a day: open tasks first, then by priority (unknown priority counts as Medium).
     const priorityRank = { High: 0, Medium: 1, Low: 2 };
     Object.values(tasksByDay).forEach(dayTasks => dayTasks.sort((first, second) =>
       (first.done - second.done) || ((priorityRank[first.pri] ?? 1) - (priorityRank[second.pri] ?? 1))));
 
-    // Opens the task's drawer right on the Calendar (TaskModalHost hosts it).
-    const openTask = task => event => { if (event) event.stopPropagation(); this.setState({ pop: null }); useStore.getState().openTeamTaskDrawer(task.id); };
+    // A team task opens its drawer right on the Calendar (TaskModalHost hosts it); a founder task its task page.
+    const openTask = task => event => {
+      if (event) event.stopPropagation();
+      if (task.kind === 'mine') return this.setState({ pop: null, tpeek: task.id });
+      this.setState({ pop: null });
+      useStore.getState().openTeamTaskDrawer(task.id);
+    };
+    const ownerLabel = owner => (owner === 'both' ? ALL_FOUNDERS : (PEOPLE[owner] || {}).first || '');
 
     const days = Array.from({ length: weekCount * 7 }, (_, cellIndex) => {
       const date = new Date(year, monthIndex, 1 - leadingDays + cellIndex), dayKey = iso(date), dayTasks = tasksByDay[dayKey] || [];
@@ -46,16 +59,18 @@ export default class HQActions extends HQTasksHiringDocs {
         over: overdueCount + ' late',
         overTip: overdueCount + ' overdue',
         chips: dayTasks.slice(0, 3).map(task => {
-          const company = coOf(task.co);
+          const company = coOf(task.co), mine = task.kind === 'mine';
           return {
-            title: task.title || 'Untitled task',
+            title: (mine ? 'My task: ' : 'Team task: ') + (task.title || 'Untitled task'),
+            label: task.title || 'Untitled task',
             dot: company.bg || 'oklch(0.6 0.02 265)',
             bg: task.done ? 'oklch(0.965 0.003 85)' : company.tint,
             fg: task.done ? 'oklch(0.6 0.01 265)' : company.ink,
             deco: task.done ? 'line-through' : 'none',
             open: openTask(task),
-            isTeam: true,
-            who: task.team.who,
+            mine,
+            isTeam: !mine,
+            who: mine ? '' : task.team.who,
           };
         }),
         bg: isSelected ? 'color-mix(in oklch, var(--acc, oklch(0.5 0.17 265)) 6%, #fff)' : inMonth ? '#fff' : 'oklch(0.985 0.003 85)',
@@ -67,9 +82,41 @@ export default class HQActions extends HQTasksHiringDocs {
     });
 
     const monthKey = year + '-' + String(month).padStart(2, '0');
-    const monthTasks = datedTasks.filter(task => task.due.slice(0, 7) === monthKey);
-    const overdueInMonth = monthTasks.filter(task => !task.done && task.due < today).length;
+    const inMonth = task => task.due.slice(0, 7) === monthKey;
+    const monthName = new Date(year, monthIndex, 1).toLocaleDateString('en-IN', { month: 'long' });
     const shiftMonth = delta => { const date = new Date(year, monthIndex + delta, 1); update({ calM: iso(date).slice(0, 7) }); };
+
+    // Every number on the page counts the tasks due in the month shown, for the chosen kind and company,
+    // so the tabs, the pills and the line under the title always agree.
+    const countOf = (k, co) => {
+      const list = ofKind(k).filter(task => inMonth(task) && (co === 'all' || task.co === co));
+      return {
+        due: list.length,
+        done: list.filter(task => task.done).length,
+        overdue: list.filter(task => !task.done && task.due < today).length,
+      };
+    };
+    const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+    const KINDS = [['all', 'All'], ['team', 'Team tasks'], ['mine', 'My tasks']];
+    const kindTabs = KINDS.map(([id, label]) => {
+      const st = countOf(id, companyFilter), active = kind === id;
+      return {
+        label,
+        n: String(st.due),
+        tip: plural(st.due, 'task') + ' due in ' + monthName + ' · ' + st.done + ' done · ' + st.overdue + ' overdue',
+        bg: active ? '#fff' : 'transparent',
+        fg: active ? 'oklch(0.23 0.015 265)' : 'oklch(0.52 0.012 265)',
+        sh: active ? '0 1px 2px oklch(0.2 0.02 265 / 0.12)' : 'none',
+        go: () => update({ calKind: id }),
+      };
+    });
+    const shown = countOf(kind, companyFilter);
+    const team = countOf('team', companyFilter), mine = countOf('mine', companyFilter);
+    const split = key => (kind === 'all' ? team[key] + ' team · ' + mine[key] + ' mine' : '');
+    const pills = [
+      { label: 'Overdue', v: String(shown.overdue), tip: split('overdue'), fg: shown.overdue ? 'oklch(0.5 0.17 25)' : 'oklch(0.52 0.012 265)', bg: shown.overdue ? 'oklch(0.96 0.03 25)' : 'oklch(0.965 0.004 85)' },
+      { label: 'Done', v: String(shown.done), tip: split('done'), fg: shown.done ? 'oklch(0.45 0.12 150)' : 'oklch(0.52 0.012 265)', bg: shown.done ? 'oklch(0.96 0.03 150)' : 'oklch(0.965 0.004 85)' },
+    ];
 
     const selectedDate = new Date(selectedDay + 'T00:00:00');
     const selectedTasks = tasksByDay[selectedDay] || [];
@@ -77,12 +124,15 @@ export default class HQActions extends HQTasksHiringDocs {
     const pinnedCompanies = COS.filter(company => company.pin).slice(0, 10);
 
     return {
-      sub: monthTasks.length + (monthTasks.length === 1 ? ' task' : ' tasks') + ' due in '
-        + new Date(year, monthIndex, 1).toLocaleDateString('en-IN', { month: 'long' })
-        + (overdueInMonth ? ' · ' + overdueInMonth + ' overdue' : '') + ' · pick a day, then + New task',
+      sub: plural(shown.due, 'task') + ' due in ' + monthName
+        + (kind === 'all' ? ' (' + team.due + ' team · ' + mine.due + ' mine)' : '')
+        + ' · pick a day, then add a task',
       month: new Date(year, monthIndex, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
       wd: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
       days,
+      weeks: weekCount,
+      pills,
+      kindTabs,
       prev: () => shiftMonth(-1),
       next: () => shiftMonth(1),
       today: () => update({ calM: null, calSel: today }),
@@ -93,35 +143,54 @@ export default class HQActions extends HQTasksHiringDocs {
           hasTile: company.id !== 'all',
           tile: company.bg,
           ini: company.ini,
-          n: String(myDated.filter(task => !task.done && (company.id === 'all' || task.co === company.id)).length),
+          n: String(countOf(kind, company.id).due),
           fg: active ? 'oklch(0.23 0.015 265)' : 'oklch(0.52 0.012 265)',
           bd: active ? 'var(--acc, oklch(0.5 0.17 265))' : 'transparent',
           go: () => update({ calCo: company.id }),
         };
       }),
       selLabel: selectedDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
-      selCount: selectedTasks.length ? selectedTasks.length + (selectedTasks.length === 1 ? ' task' : ' tasks') + ' due' : 'No tasks due',
+      selCount: selectedTasks.length ? plural(selectedTasks.length, 'task') + ' due' : 'No tasks due',
       selEmpty: !selectedTasks.length,
-      selTasks: selectedTasks.map(task => ({
-        title: task.title,
-        meta: [coOf(task.co).name, task.team.who, task.pri, task.status].filter(Boolean).join(' · '),
-        deco: task.done ? 'line-through' : 'none',
-        fg: task.done ? 'oklch(0.6 0.01 265)' : 'oklch(0.23 0.015 265)',
-        mark: task.done ? '✓' : '',
-        checkBg: task.done ? 'oklch(0.55 0.14 150)' : '#fff',
-        checkBd: task.done ? 'oklch(0.55 0.14 150)' : 'oklch(0.75 0.01 265)',
-        checkTip: task.done ? 'Open it to reopen' : task.canStatus ? 'Mark as done' : 'Open in Tasks',
-        // Tick = done; a task that can't be ticked here (done already, or not mine to change) opens on the Calendar.
-        toggle: event => {
-          if (event) event.stopPropagation();
-          if (task.done || !task.canStatus) openTask(task)(); else this.toggleTask(task);
-        },
-        open: openTask(task),
-        isTeam: true,
-        who: '',
-      })),
-      // The full "New task" form, over the Calendar, for the selected day and company.
+      selTasks: selectedTasks.map(task => {
+        const mine = task.kind === 'mine';
+        const canTick = mine || task.canStatus;
+        return {
+          title: task.title || 'Untitled task',
+          meta: [coOf(task.co).name, mine ? ownerLabel(task.owner) : task.team.who, task.pri, task.status].filter(Boolean).join(' · '),
+          deco: task.done ? 'line-through' : 'none',
+          fg: task.done ? 'oklch(0.6 0.01 265)' : 'oklch(0.23 0.015 265)',
+          mark: task.done ? '✓' : '',
+          checkBg: task.done ? 'oklch(0.55 0.14 150)' : '#fff',
+          checkBd: task.done ? 'oklch(0.55 0.14 150)' : 'oklch(0.75 0.01 265)',
+          checkTip: mine ? (task.done ? 'Mark as not done' : 'Mark as done') : task.done ? 'Open it to reopen' : task.canStatus ? 'Mark as done' : 'Open in Team tasks',
+          // Tick = done (a founder task toggles; a team task that can't be ticked here opens on the Calendar).
+          toggle: event => {
+            if (event) event.stopPropagation();
+            if (mine) this.myTaskAct(task.id, 'done');
+            else if (task.done || !canTick) openTask(task)();
+            else this.toggleTask(task);
+          },
+          open: openTask(task),
+          mine,
+          isTeam: !mine,
+          who: '',
+        };
+      }),
+      // "+ Team task": the full team task form over the Calendar, for the selected day and company.
       newTask: () => openNewTeamTaskHere({ co: companyFilter, due: selectedDay }),
+      // "+ My task": a founder task due on the selected day, opened in its task page to type the title.
+      newMyTask: () => {
+        const id = uid();
+        this.upd(data => {
+          data.tasks.push({
+            id, title: '', co: companyFilter !== 'all' ? companyFilter : 'mariox', owner: me, start: '', due: selectedDay,
+            status: 'Not started', pri: 'Medium', done: false, notes: '', created: Date.now(),
+          });
+        });
+        this._focus = { sel: '[data-tpeek-title]' };
+        this.setState({ pop: null, tpeek: id, fresh: [id, ...(state.fresh || [])], calKind: kind === 'team' ? 'all' : kind });
+      },
     };
   }
 
@@ -293,7 +362,7 @@ export default class HQActions extends HQTasksHiringDocs {
     if (pw !== pw2) return this.setV({ err: 'The two passwords don\'t match.' });
     this.setV({ busy: true, err: '' });
     try {
-      // The other founder may have created the vault since this page loaded: unlock that one instead.
+      // Another founder may have created the vault since this page loaded: unlock that one instead.
       const existing = await fetchVault();
       if (existing) return this.setV({ sealed: existing, pw: '', pw2: '', busy: false, err: 'A vault already exists. Unlock it with its master password.' });
       const salt = crypto.getRandomValues(new Uint8Array(16)); const key = await deriveKey(pw, salt);
@@ -301,7 +370,7 @@ export default class HQActions extends HQTasksHiringDocs {
       this.setV({ key, salt, items: [], sealed, pw: '', pw2: '', err: '', busy: false });
     } catch (error) { this.setV({ err: error.message, busy: false }); }
   }
-  /** Decrypts the newest stored vault (it is shared by both founders) with the typed master password. */
+  /** Decrypts the newest stored vault (it is shared by all founders) with the typed master password. */
   async vUnlock() {
     this.setV({ busy: true, err: '' });
     let sealed;

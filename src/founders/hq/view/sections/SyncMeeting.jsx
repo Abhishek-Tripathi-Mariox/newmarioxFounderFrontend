@@ -1,7 +1,6 @@
 /* Converted from the Founders HQ prototype (CEO Portal/netlify-site/index.html). */
 import { Fragment } from 'react';
 import { show, attr, inlineStyle, asList, inputValue } from '../rt';
-import { PEOPLE } from '../../logic/core';
 
 export default function SyncMeeting({ vm }) {
   return (<>
@@ -492,7 +491,8 @@ export default function SyncMeeting({ vm }) {
                 </span>
               </>) : null}
               {issue?.canAct ? (<>
-                <button onClick={issue?.taskR} style={{
+                {(issue?.taskFor || []).map((task) => (
+                <button key={task.label} onClick={task.go} style={{
                     height: '28px',
                     border: '1px solid oklch(0.9 0.006 85)',
                     background: '#fff',
@@ -504,22 +504,9 @@ export default function SyncMeeting({ vm }) {
                     color: 'oklch(0.35 0.012 265)',
                     whiteSpace: 'nowrap',
                   }}>
-                  {`→ Task for ${PEOPLE.rahul.first}`}
+                  {task.label}
                 </button>
-                <button onClick={issue?.taskS} style={{
-                    height: '28px',
-                    border: '1px solid oklch(0.9 0.006 85)',
-                    background: '#fff',
-                    borderRadius: '7px',
-                    padding: '0 9px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    color: 'oklch(0.35 0.012 265)',
-                    whiteSpace: 'nowrap',
-                  }}>
-                  {`→ Task for ${PEOPLE.saswat.first}`}
-                </button>
+                ))}
                 <button onClick={issue?.dec} style={{
                     height: '28px',
                     border: '1px solid oklch(0.9 0.006 85)',

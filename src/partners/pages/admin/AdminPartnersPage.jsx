@@ -9,6 +9,7 @@ import { LOGIN_PATH } from '@/lib/sso';
 import { date } from '@/partners/lib/format';
 
 import { R } from '@/partners/lib/validate';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 
 const NEW_FIELDS = [
   { name: 'name', label: 'Full name', required: true, rule: R.person },
@@ -34,6 +35,7 @@ const SOURCES = [
 export default function PartnersPage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const can = usePpCan();
   // Partners only: staff who run Partners have an admin profile here too (one login, docs/SSO.md),
   // but they are managed in Users & roles, not listed as partners.
   const list = useList('/admin/users?role=partner', 'users', { sort: '-createdAt' });
@@ -65,7 +67,7 @@ export default function PartnersPage() {
         eyebrow="Admin"
         title="Partners"
         subtitle="Accounts created here or from the main website through POST /api/v1/users."
-        actions={<Button variant="fire" icon="plus" onClick={() => setAdding(true)}>Add partner</Button>}
+        actions={can('pp_partners', 'c') && <Button variant="fire" icon="plus" onClick={() => setAdding(true)}>Add partner</Button>}
       />
 
       <div className="toolbar">
@@ -110,12 +112,12 @@ export default function PartnersPage() {
               render: u =>
                 u.role === 'partner' && (
                   <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
-                    {u.status === 'disabled' ? (
+                    {!can('pp_partners', 'e') ? null : u.status === 'disabled' ? (
                       <Button size="xs" variant="good" onClick={() => setStatus(u, 'active')}>Reactivate</Button>
                     ) : (
                       <Button size="xs" variant="danger" onClick={() => confirm(`Suspend ${u.name}?`) && setStatus(u, 'disabled')}>Suspend</Button>
                     )}
-                    <Button size="xs" variant="danger" icon="trash" aria-label={`Delete ${u.name}`} title="Delete partner" onClick={() => setDeleting(u)} />
+                    {can('pp_partners', 'd') && <Button size="xs" variant="danger" icon="trash" aria-label={`Delete ${u.name}`} title="Delete partner" onClick={() => setDeleting(u)} />}
                   </span>
                 ),
             },

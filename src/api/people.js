@@ -1,7 +1,7 @@
 /**
  * People API: users, roles, audit log — loader, endpoint calls and DTO adapters.
  * Store shapes (CONTRACT.md → Data shapes):
- *   user  {id,name,email,phone,title,role,dept,reports,join,status,last,h,ownerId?,memberId?,clientOf?[],shift,invited?,hqSeat}
+ *   user  {id,name,email,phone,title,role,dept,reports,join,status,last,h,ownerId?,memberId?,clientOf?[],shift,invited?,hqSeat,hqRole}
  *   role  {id,name,desc,h,locked?,perms{[module]:{v,c,e,d,scope}}, users?}
  *   audit {d,actor,text,kind}
  */
@@ -32,8 +32,9 @@ export function fromApiUser(u) {
     // Only clients carry a project list (UsersTable shows "N (client)" when present).
     clientOf: u.role === 'r-client' ? u.clientOf || [] : undefined,
     shift: u.shiftHours || 8,
-    // Founders HQ seat ('rahul' | 'saswat' | null) — docs/SSO.md.
+    // Founders HQ access (docs/SSO.md): HQ person id + role ('founder' | 'cofounder'), null without access.
     hqSeat: u.hq_seat ?? u.hqSeat ?? null,
+    hqRole: u.hq_role ?? u.hqRole ?? null,
   };
 }
 
@@ -59,17 +60,18 @@ export function userFromMe(me) {
     clientOf: role.id === 'r-client' ? me.clientOf || [] : undefined,
     shift: me.shiftHours || 8,
     hqSeat: (me.apps && me.apps.founders) || null,
+    hqRole: (me.apps && me.apps.foundersRole) || null,
   };
 }
 
 /**
- * User modal form → API body. `hq_seat` is sent only when the form has the field (it is shown to
- * Super Admins only; the server rejects it from anyone else).
+ * User modal form → API body. `hq_role` (Founders HQ access) is sent only when the form has the field
+ * (it is shown to Super Admins only; the server rejects it from anyone else).
  */
 export function toApiUser(m) {
   const shift = +m.shift || 8;
   return {
-    ...('hqSeat' in m ? { hq_seat: m.hqSeat || null } : {}),
+    ...('hqRole' in m ? { hq_role: m.hqRole || null } : {}),
     name: (m.name || '').trim(),
     email: (m.email || '').trim(),
     phone: (m.phone || '').trim(),

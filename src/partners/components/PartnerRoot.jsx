@@ -1,11 +1,13 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { PortalHostContext } from '@/partners/lib/portalHost';
-import { useTheme } from '@/partners/lib/theme';
 import { ensurePartnerFonts } from '@/partners/lib/fonts';
 import '@/partners/styles/isolation.css';
 import '@/partners/styles/theme.css';
 import '@/partners/styles/globals.css';
+import '@/partners/styles/acquire.css';
+import '@/partners/styles/skin.css';
+import '@/partners/styles/shell.css';
 
 const TITLE = 'Mariox Partners';
 const DESCRIPTION = 'Mariox partner portal: pipeline, commissions, projects and sales toolkit.';
@@ -36,18 +38,19 @@ function useScrollToTopOnNavigate() {
 }
 
 /**
- * Root of the partner app. Everything it renders sits inside `.pp-root`, which carries the theme
- * (`data-theme`) and scopes the partner stylesheets. Overlays portal into this same element
- * (see lib/portalHost.js), so children mount once the element exists.
+ * Root of the partner app. Everything it renders sits inside `.pp-root`, which scopes the partner
+ * stylesheets. Light only, like the internal portal and Founders HQ: `data-theme="light"` keeps
+ * theme.css's dark token blocks (system dark mode) from applying under the portal skin (skin.css).
+ * Overlays portal into this same element (see lib/portalHost.js), so children mount once the
+ * element exists.
  */
 export default function PartnerRoot() {
-  const theme = useTheme();
   const [host, setHost] = useState(null);
   useDocumentHead();
   useScrollToTopOnNavigate();
 
   return (
-    <div ref={setHost} className="pp-root" data-theme={theme === 'system' ? undefined : theme}>
+    <div ref={setHost} className="pp-root" data-theme="light">
       {host && (
         <PortalHostContext.Provider value={host}>
           <Suspense fallback={null}>

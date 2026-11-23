@@ -127,7 +127,7 @@ export default function RulePanel({ vm }) {
             }} />
           {vm.cx?.R?.isPend ? (<>
             <span style={{ fontSize: '12px', color: 'oklch(0.5 0.12 65)' }}>
-              {'Changing the wording clears approvals, so both founders agree to the new text.'}
+              {'Changing the wording clears approvals, so all founders agree to the new text.'}
             </span>
           </>) : null}
         </>) : null}

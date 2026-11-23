@@ -4,6 +4,7 @@ import { initialsOf } from '@/founders/auth/accounts';
 import {
   KEY,
   PEOPLE,
+  memberOpts,
   COS,
   coOf,
   syncCos,
@@ -31,7 +32,6 @@ import {
   RX_DEF,
   goalCalc,
   AI_ON,
-  PORTAL_URLS,
   applyAccountNames
 } from './core';
 import Root from '../view/Root';
@@ -65,7 +65,7 @@ export default class FoundersHQ extends HQActions {
   shellViewModel() {
     syncCos(this.state.data);
     const { view, me, data, nr: newRole, ai } = this.state;
-    const myProfile = PEOPLE[me];
+    const myProfile = PEOPLE[me] || PEOPLE.both;
     // Team tasks are HQ's tasks: every one the founder can see / the ones assigned to or given by them.
     const openTasks = this.tasksAll().filter(task => !task.done);
     const myOpenTasks = openTasks.filter(task => task.mine);
@@ -79,7 +79,9 @@ export default class FoundersHQ extends HQActions {
     const navItems = [
       ['home', 'Today', ''],
       // The view shows the portal store's live count (useOpenTeamTaskCount) once team tasks have loaded.
-      ['tasks', 'Tasks', String(myOpenTasks.length)],
+      ['tasks', 'Team tasks', String(myOpenTasks.length)],
+      // My tasks: the founders' own tasks (data.tasks) that are mine or shared, still open.
+      ['mytasks', 'My tasks', String(data.tasks.filter(task => !task.done && (task.owner === me || task.owner === 'both')).length)],
       [
         'calendar',
         'Calendar',
@@ -109,7 +111,9 @@ export default class FoundersHQ extends HQActions {
         'Companies',
         String((data.companies || []).filter(company => company.status !== 'Closed').length)
       ],
-      ['constitution', 'Constitution', '']
+      ['constitution', 'Constitution', ''],
+      // The internal portal's Users & roles page (people, roles and permissions), hosted in HQ.
+      ['users', 'Users & roles', '']
     ];
     // Sidebar pages come from the user's preferences (order, visibility, custom labels).
     const prefs = this.pf(),
@@ -128,10 +132,11 @@ export default class FoundersHQ extends HQActions {
       }));
     // Sidebar sections; pages not listed here go under 'More'.
     const NAV_GROUPS = [
-      ['Daily', ['home', 'tasks', 'calendar', 'attendance', 'brief']],
+      ['Daily', ['home', 'tasks', 'mytasks', 'calendar', 'attendance', 'brief']],
       ['Strategy', ['goals', 'decisions', 'sync']],
       ['Business', ['pipeline', 'finance', 'hiring']],
-      ['Knowledge', ['research', 'docs', 'vault', 'constitution']]
+      ['Knowledge', ['research', 'docs', 'vault', 'constitution']],
+      ['Admin', ['users']]
     ];
     // The Companies page is opened from the Companies block at the top of the sidebar ("All companies →").
     const SHOWN_IN_COMPANIES_BLOCK = ['companies'];
@@ -149,10 +154,8 @@ export default class FoundersHQ extends HQActions {
       .filter(group => group.items.length)
       .map(group => ({ ...group, pad: '16px' }));
     const ACTIVE = 'var(--side2, oklch(0.3 0.025 265))';
-    // Mariox has two portals (internal portal + partner portal), both opened inside HQ on the Mariox page,
-    // which also hosts their management pages (Users & roles, Partners) as tabs.
-    const trimSlash = url => String(url || '').replace(/\/+$/, '');
-    const mxTabBg = tab => (view === 'summary' && (this.state.mxTab || '/') === tab ? ACTIVE : 'transparent');
+    // Mariox has two portals (internal portal + partner admin console). Their pages open inside HQ
+    // (view 'summary'); the sidebar lists them under Mariox → Internal portal / Partner portal.
     const coNav = COS.filter(company => company.pin)
       .slice(0, 10)
       .map(company => {
@@ -165,20 +168,11 @@ export default class FoundersHQ extends HQActions {
           live: !isMariox && !!company.href,
           go: () => this.go('co', { coView: company.id }),
           navBg: view === 'co' && this.state.coView === company.id ? ACTIVE : 'transparent',
-          goMx: () => this.go('summary', { mxTab: '/' }),
-          goMxInternal: () => this.go('summary', { mxTab: '/mariox' }),
-          goMxPartners: () => this.go('summary', { mxTab: '/partners' }),
-          goMxUsers: () => this.go('summary', { mxTab: '/users' }),
-          goMxPartnerAdmin: () => this.go('summary', { mxTab: '/partner-admin' }),
-          mxBg: mxTabBg('/'),
-          mxInternalBg: mxTabBg('/mariox'),
-          mxPartnersBg: mxTabBg('/partners'),
-          mxUsersBg: mxTabBg('/users'),
-          mxPartnerAdminBg: mxTabBg('/partner-admin'),
-          internalUrl: company.href || PORTAL_URLS.internal,
-          partnersUrl: company.partnerHref || PORTAL_URLS.partners,
-          usersUrl: trimSlash(company.href || PORTAL_URLS.internal) + '/users',
-          partnerAdminUrl: trimSlash(company.partnerHref || PORTAL_URLS.partners) + '/partners'
+          // Which Mariox portal page is open: app 'internal' | 'partner' (null when HQ shows something else).
+          mxApp: view === 'summary' ? this.state.mxApp || 'internal' : null,
+          mxPath: this.state.mxPath || '',
+          goMxPage: (app, path) => this.go('summary', { mxApp: app, mxPath: path }),
+          activeBg: ACTIVE
         };
       });
     const now = new Date();
@@ -199,9 +193,11 @@ export default class FoundersHQ extends HQActions {
       home: 'Today',
       goals: 'Goals',
       decisions: 'Decisions',
-      tasks: 'Tasks',
+      tasks: 'Team tasks',
+      mytasks: 'My tasks',
       calendar: 'Calendar',
       attendance: 'Attendance',
+      users: 'Admin · Users & roles',
       research: 'Research',
       finance: 'Finance',
       hiring: 'Hiring',
@@ -387,11 +383,7 @@ export default class FoundersHQ extends HQActions {
         },
         owner: {
           f: research => research.owner,
-          opts: OWNER_OPTS.map(([value, label]) => [
-            value,
-            label === 'Both' ? PEOPLE.both.name : label,
-            PEOPLE[value].bg
-          ])
+          opts: OWNER_OPTS.map(([value, label]) => [value, label, PEOPLE[value].bg])
         },
         priority: {
           f: research => research.pri || 'Medium',
@@ -594,9 +586,7 @@ export default class FoundersHQ extends HQActions {
         ]),
         researchSelect('owner', 'any', [
           ['any', 'Any owner'],
-          ['rahul', 'Owner: ' + PEOPLE.rahul.first],
-          ['saswat', 'Owner: ' + PEOPLE.saswat.first],
-          ['both', 'Owner: Both']
+          ...memberOpts().map(([value, label]) => [value, 'Owner: ' + label])
         ]),
         researchSelect('pri', 'any', [
           ['any', 'Any priority'],
@@ -2158,6 +2148,8 @@ export default class FoundersHQ extends HQActions {
       }),
       isHome: view === 'home',
       isTasks: view === 'tasks',
+      isMyTasks: view === 'mytasks',
+      isUsers: view === 'users',
       isResearch: view === 'research',
       isFinance: view === 'finance',
       isHiring: view === 'hiring',
@@ -2232,7 +2224,7 @@ export default class FoundersHQ extends HQActions {
 
   closeAccounts = () => this.setState({ accountsOpen: false });
 
-  /** Account names label the two seats everywhere in HQ, so re-render after they change. */
+  /** The accounts define HQ's people (names, owner pickers, approvals), so re-render after they change. */
   accountsChanged = users => {
     applyAccountNames(users);
     this.forceUpdate();

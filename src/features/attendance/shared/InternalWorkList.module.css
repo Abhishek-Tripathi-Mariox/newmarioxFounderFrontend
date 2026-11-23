@@ -12,3 +12,12 @@
 }
 .h { flex-shrink: 0; font-weight: 600; white-space: nowrap; }
 .note { white-space: pre-wrap; text-wrap: pretty; color: var(--ink-2, inherit); min-width: 0; overflow-wrap: anywhere; }
+
+/* Team tasks from the end-of-shift report (TeamTaskReportList). */
+.ttTotal { font-size: 12px; font-weight: 600; color: oklch(0.45 0.13 150); }
+.ttDone, .ttOpen {
+  flex-shrink: 0; white-space: nowrap; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+}
+.ttDone { background: oklch(0.95 0.04 150); color: oklch(0.4 0.12 150); }
+.ttOpen { background: oklch(0.95 0.02 265); color: oklch(0.42 0.1 265); }
+.ttTitle { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }

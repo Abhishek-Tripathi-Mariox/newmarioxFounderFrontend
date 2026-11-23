@@ -1,10 +1,16 @@
 import { useStore } from '@/store';
-import { MODULES, MODULE_ACTIONS, NO_SCOPE_MODULES } from '@/config/constants';
+import { Fragment } from 'react';
+import { MISSING_ACTION_NOTE, MODULES, MODULE_ACTIONS, MODULE_GROUPS, NO_SCOPE_MODULES } from '@/config/constants';
 import { DATA_SCOPES, PERM_ACTIONS, permOf } from '../users.utils';
 import s from './PermissionMatrix.module.css';
 
 const lockedMsg = (role) => `${role.name} is a locked system role`;
 const hasAction = (mod, act) => !MODULE_ACTIONS[mod] || MODULE_ACTIONS[mod].includes(act);
+const missingNote = (mod, act, label) => {
+  const n = MISSING_ACTION_NOTE[mod];
+  return (typeof n === 'string' ? n : n && n[act]) || `Not used for ${label}`;
+};
+const groupAt = Object.fromEntries(MODULE_GROUPS.map(([title, first]) => [first, title]));
 
 /** One View/Create/Edit/Delete checkbox cell. */
 function PermCheck({ on, locked, tip, onToggle }) {
@@ -80,27 +86,34 @@ export default function PermissionMatrix({ role }) {
           {MODULES.map(([k, label, hint]) => {
             const p = permOf(role, k);
             return (
-              <tr key={k}>
-                <td className={s.modTd}>
-                  <div className={s.modName}>{label}</div>
-                  <div className={s.hint}>{hint}</div>
-                </td>
-                {PERM_ACTIONS.map(([a, actLabel]) => (
-                  <td key={a} className={s.actTd}>
-                    {!hasAction(k, a) ? <span className={s.hint} title={`Not used for ${label}`}>—</span> : <PermCheck
-                      on={!!p[a]}
-                      locked={locked}
-                      tip={locked ? 'System role cannot be changed' : `${actLabel} ${label}`}
-                      onToggle={() => toggle(k, a)}
-                    />}
+              <Fragment key={k}>
+                {groupAt[k] && (
+                  <tr className={s.groupRow}>
+                    <td colSpan={2 + PERM_ACTIONS.length}>{groupAt[k]}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td className={s.modTd}>
+                    <div className={s.modName}>{label}</div>
+                    <div className={s.hint}>{hint}</div>
                   </td>
-                ))}
-                <td className={s.scopeTd}>
-                  {NO_SCOPE_MODULES.includes(k)
-                    ? <span className={s.hint} title={`${label} has no data scope`}>—</span>
-                    : <ScopeSwitch value={p.scope} enabled={p.v} onSelect={(v) => setScope(k, p, v)} />}
-                </td>
-              </tr>
+                  {PERM_ACTIONS.map(([a, actLabel]) => (
+                    <td key={a} className={s.actTd}>
+                      {!hasAction(k, a) ? <span className={s.hint} title={missingNote(k, a, label)}>—</span> : <PermCheck
+                        on={!!p[a]}
+                        locked={locked}
+                        tip={locked ? 'System role cannot be changed' : `${actLabel} ${label}`}
+                        onToggle={() => toggle(k, a)}
+                      />}
+                    </td>
+                  ))}
+                  <td className={s.scopeTd}>
+                    {NO_SCOPE_MODULES.includes(k)
+                      ? <span className={s.hint} title={`${label} has no data scope: partner records belong to partners, not to team members`}>—</span>
+                      : <ScopeSwitch value={p.scope} enabled={p.v} onSelect={(v) => setScope(k, p, v)} />}
+                  </td>
+                </tr>
+              </Fragment>
             );
           })}
         </tbody>

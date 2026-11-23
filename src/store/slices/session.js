@@ -5,7 +5,7 @@ import { liveBase } from '@/domain/live';
 import { emptyData, initialUiState } from '../initialState';
 import { currentPath, navigate } from '../navigation';
 import { serverNow } from '@/lib/clock';
-import { LOGIN_PATH, audienceMismatch, isPortalPath, landingFor, leaveTo, nextFromLocation } from '@/lib/sso';
+import { LOGIN_PATH, isPortalPath, landingFor, leaveTo, nextFromLocation } from '@/lib/sso';
 
 /**
  * Session: restore on page load, sign in / out, and load all data from the API.
@@ -90,20 +90,16 @@ export const createSessionSlice = (set, get) => ({
     return false;
   },
 
-  /** Sign in. Returns an error message, or undefined on success. */
-  async login(email, pw, audience = null) {
+  /**
+   * Sign in. Returns an error message, or undefined on success. Every account lands in its own place
+   * (`enter` → landingFor: safe `?next=`, else founder seat → /founders, partner → /partners, …).
+   */
+  async login(email, pw) {
     let res;
     try {
       res = await api.post('/auth/login', { email: (email || '').trim(), password: pw || '' });
     } catch (e) {
       return e instanceof ApiError ? e.message : 'Sign-in failed — try again';
-    }
-    // Signed in through the wrong box (e.g. a partner under "Founder"): end that session at once,
-    // before any data loads or the workday starts, and say which box to use.
-    const mismatch = audienceMismatch(res.user, audience);
-    if (mismatch) {
-      await api.post('/auth/logout').catch(() => {});
-      return mismatch;
     }
     setAccessToken(res.accessToken);
     try {

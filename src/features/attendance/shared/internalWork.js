@@ -17,3 +17,12 @@ export function internalEntries(reports, { who, from, to } = {}) {
 export const internalOn = (reports, who, d) => internalEntries(reports, { who, from: d, to: d + 1 });
 
 export const sumH = (list) => list.reduce((x, e) => x + e.h, 0);
+
+/**
+ * Team tasks one person reported in their end-of-shift report that day (`d` = start-of-day
+ * timestamp): `[{id, title, done, h, note, p, to}]` (done = completed in the report).
+ */
+export function teamTasksOn(reports, who, d) {
+  const r = (reports || []).find((x) => x.who === who && x.d === d);
+  return (r && r.teamTasks) || [];
+}

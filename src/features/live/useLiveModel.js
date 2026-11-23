@@ -31,7 +31,7 @@ export const LIVE_CHIPS = [['all', 'Everyone'], ['attention', 'Needs attention']
 export const FEED_SEGMENTS = [['all', 'All'], ['team', 'Team'], ['sales', 'Sales'], ['proj', 'Clients']];
 
 /** Feed dot hue per event kind. */
-const FK = { in: 265, out: 265, start: 250, stop: 250, break: 70, call: 150, email: 250, whatsapp: 150, meeting: 300, note: 85, quote: 35, status: 265, owner: 220, appr: 150 };
+const FK = { in: 265, out: 265, start: 250, stop: 250, break: 70, call: 150, email: 250, whatsapp: 150, meeting: 300, note: 85, quote: 35, status: 265, owner: 220, appr: 150, task: 150 };
 
 const dotFor = (key) =>
   key === 'work' ? 'oklch(0.62 0.16 150)'

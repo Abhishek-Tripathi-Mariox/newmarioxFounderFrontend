@@ -3,6 +3,7 @@ import { useStore } from '@/store';
 import { Field } from '@/components/ui';
 import { navigate } from '@/store/navigation';
 import s from './LoginScreen.module.css';
+import PasswordField from './PasswordField';
 
 const MODES = {
   'accept-invite': {
@@ -70,9 +71,7 @@ export default function AccountSetupScreen({ mode }) {
                 <input className={s.input} type="email" value={email} readOnly autoComplete="username" />
               </Field>
               <Field label="New password">
-                <input
-                  className={s.input}
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   autoFocus
                   value={pw}
@@ -82,9 +81,7 @@ export default function AccountSetupScreen({ mode }) {
                 />
               </Field>
               <Field label="Confirm password">
-                <input
-                  className={s.input}
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   value={pw2}
                   aria-invalid={!!err || undefined}

@@ -1,6 +1,6 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import HQDocEditor from './03-doc-editor';
-import { PEOPLE, ALLCOS, coColors, ensureCos, OWNER_OPTS, segOf, iso, plus, uid, INK_C, MUTED, CN_CATS, XCH, XAUTH_DEF, XmigrateCons, CO_STATUS, COUNTRIES, ENTITIES, AI_ON, PORTAL_URLS } from './core';
+import { PEOPLE, MEMBERS, memberOpts, allAgreed, teamLine, ALL_FOUNDERS, ALLCOS, coColors, ensureCos, OWNER_OPTS, segOf, iso, plus, uid, INK_C, MUTED, CN_CATS, XCH, XAUTH_DEF, XmigrateCons, CO_STATUS, COUNTRIES, ENTITIES, AI_ON } from './core';
 
 /** Fill colour for a setup-progress percentage (grey when nothing is applied). */
 const progressColor = pct =>
@@ -219,7 +219,7 @@ export default class HQCompanies extends HQDocEditor {
         filterSelect('status', 'any', [['any', 'Open companies'], ['all', 'All incl. closed'], ...Object.keys(CO_STATUS).map(status => [status, 'Status: ' + status])]),
         filterSelect('country', 'any', [['any', 'Any country'], ...COUNTRIES.map(country => [country, country])]),
         filterSelect('industry', 'any', [['any', industries.length ? 'Any industry' : 'No industries yet'], ...industries.map(industry => [industry, industry])]),
-        filterSelect('owner', 'any', [['any', 'Any owner'], ['rahul', `Owner: ${PEOPLE.rahul.first}`], ['saswat', `Owner: ${PEOPLE.saswat.first}`], ['both', 'Owner: Both']]),
+        filterSelect('owner', 'any', [['any', 'Any owner'], ...memberOpts().map(([id, label]) => [id, 'Owner: ' + label])]),
         filterSelect('setup', 'any', [['any', 'Any setup'], ['none', 'No playbook yet'], ['inprog', 'Setup in progress'], ['done', 'Setup complete']]),
       ],
       sortSel: {
@@ -506,7 +506,8 @@ export default class HQCompanies extends HQDocEditor {
     const visibleArticles = constitution.articles.filter(article =>
       (category === 'any' || article.cat === category)
       && (!constitutionQuery || (article.title + ' ' + article.text).toLowerCase().includes(constitutionQuery)));
-    const signedByBoth = article => ['rahul', 'saswat'].every(person => (article.sign || []).includes(person));
+    /** Ratified once every current founder / co-founder agreed. */
+    const signedByBoth = article => allAgreed(article.sign);
     const updateArticle = (articleId, fn) => updateConstitution((draftConstitution, draft) => {
       const article = draftConstitution.articles.find(item => item.id === articleId);
       if (article) fn(article, draftConstitution, draft);
@@ -523,7 +524,7 @@ export default class HQCompanies extends HQDocEditor {
       if (playbook) fn(playbook, draftConstitution, draft);
     });
 
-    /** One article on the Principles tab. Editing its wording clears both signatures. */
+    /** One article on the Principles tab. Editing its wording clears every signature. */
     const articleRow = article => {
       const articleIndex = constitution.articles.indexOf(article);
       const signers = article.sign || [];
@@ -541,7 +542,7 @@ export default class HQCompanies extends HQDocEditor {
         mustBg: article.must ? 'oklch(0.95 0.035 25)' : 'oklch(0.95 0.005 265)',
         mustFg: article.must ? 'oklch(0.48 0.17 25)' : 'oklch(0.42 0.012 265)',
         toggleMust: () => updateArticle(article.id, draftArticle => { draftArticle.must = !draftArticle.must; }),
-        signs: ['rahul', 'saswat'].map(personId => {
+        signs: MEMBERS.map(personId => {
           const agreed = signers.includes(personId);
           return {
             label: (agreed ? '✓ ' : '') + PEOPLE[personId].first + (agreed ? ' agreed' : ' to agree'),
@@ -608,7 +609,7 @@ export default class HQCompanies extends HQDocEditor {
       isPlaybooks: constitutionTab === 'playbooks',
       isRollout: constitutionTab === 'rollout',
       isHistory: constitutionTab === 'history',
-      sub: constitution.articles.length + ' articles · ' + constitution.articles.filter(signedByBoth).length + ' signed by both founders · ' + constitution.playbooks.length + ' playbooks',
+      sub: constitution.articles.length + ' articles · ' + constitution.articles.filter(signedByBoth).length + ' agreed by all founders · ' + constitution.playbooks.length + ' playbooks',
       q: this.state.cnq,
       onQ: e => this.setState({ cnq: e.target.value }),
       catSel: {
@@ -689,9 +690,9 @@ export default class HQCompanies extends HQDocEditor {
           onDays: e => updateStep(draftStep => { draftStep.days = Number(e.target.value) || 0; }),
           daysTxt: step.days ? '~' + step.days + 'd' : '',
           owner: step.owner,
-          ownerOpts: [['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first], ['both', 'Both'], ['team', 'Team']].map(([v, l]) => ({ v, l })),
+          ownerOpts: [...memberOpts(), ['team', 'Team']].map(([v, l]) => ({ v, l })),
           onOwner: e => updateStep(draftStep => { draftStep.owner = e.target.value; }),
-          ownerTxt: owner ? owner.first : step.owner === 'team' ? 'Team' : 'Both',
+          ownerTxt: owner ? owner.first : step.owner === 'team' ? 'Team' : ALL_FOUNDERS,
           mustLbl: step.must ? 'Required' : 'Optional',
           mustFg: step.must ? 'oklch(0.48 0.17 25)' : 'oklch(0.52 0.012 265)',
           toggleMust: () => updateStep(draftStep => { draftStep.must = !step.must; }),
@@ -878,7 +879,6 @@ export default class HQCompanies extends HQDocEditor {
     }));
     constitutionView.noLog = !(constitution.log || []).length;
 
-    const marioxCompany = ALLCOS.find(company => company.id === 'mariox');
     return {
       cm: companiesView,
       cp: companyPanel,
@@ -887,15 +887,11 @@ export default class HQCompanies extends HQDocEditor {
       isCompanies: this.state.view === 'companies',
       isSummary: this.state.view === 'summary',
       aiOn: AI_ON,
-      mxTab: this.state.mxTab || '/',
-      // Greeting on the Mariox page uses the signed-in founder's name.
-      mxViewerName: (PEOPLE[this.state.me] && PEOPLE[this.state.me].first) || '',
-      mxLinks: {
-        internal: (marioxCompany && marioxCompany.href) || PORTAL_URLS.internal,
-        partners: (marioxCompany && marioxCompany.partnerHref) || PORTAL_URLS.partners,
-      },
-      // Created once so the tab setter keeps the same identity across renders.
-      setMxTab: this._setMxTab || (this._setMxTab = tab => this.setState({ mxTab: tab })),
+      // Mariox portal page open inside HQ: app 'internal' | 'partner' and that portal's own path.
+      mxApp: this.state.mxApp || 'internal',
+      mxPath: this.state.mxPath || '',
+      // Created once so the setter keeps the same identity across renders (pages report moves made inside them).
+      setMxPath: this._setMxPath || (this._setMxPath = path => this.state.mxPath !== path && this.setState({ mxPath: path })),
       isConstitution: this.state.view === 'constitution',
     };
   }
@@ -922,17 +918,17 @@ export default class HQCompanies extends HQDocEditor {
     const pendingAmendments = (constitution.amendments || [])
       .filter(amendment => amendment.status === 'Pending')
       .map(amendment => 'PENDING AMENDMENT (' + amendment.type + (amendment.ruleId ? ' of ' + ruleCode(amendment.ruleId) : '') + '): ' + amendment.title + ': ' + amendment.text);
-    // Active exceptions: approved by both founders, not revoked and not expired.
+    // Active exceptions: approved by all founders, not revoked and not expired.
     const activeExceptions = (constitution.exceptions || [])
       .filter(exception => !exception.revoked
-        && ['rahul', 'saswat'].every(person => (exception.appr || []).includes(person))
+        && allAgreed(exception.appr)
         && (!exception.until || exception.until >= iso(new Date())))
       .map(exception => 'ACTIVE EXCEPTION to ' + ruleCode(exception.ruleId)
         + ' for ' + ((ALLCOS.find(company => company.id === exception.co) || {}).name || exception.co)
         + ' until ' + exception.until + ': ' + exception.reason);
 
     const promptText = [
-      'You are the Constitution assistant inside Founders HQ, the internal governance system of Rahul Garg (Founder) and Saswat Sahu (Co-founder). They run Mariox Software, HROO, Arth and future companies, mainly in India.',
+      'You are the Constitution assistant inside Founders HQ, the internal governance system of ' + teamLine() + '. They run Mariox Software, HROO, Arth and future companies, mainly in India.',
       'Answer the question using ONLY the material below. Never invent a policy. Never present a draft, pending or archived rule as approved.',
       'Write 2 to 6 short lines. Start every line with exactly one of these labels followed by a colon:',
       'APPROVED RULE: an active mandatory rule applies (cite its ID, e.g. FIN-001)',
@@ -941,7 +937,7 @@ export default class HQCompanies extends HQDocEditor {
       'MISSING RULE: nothing covers this; say what the founders need to decide',
       'Plain text only. No markdown, no bullets, no headings.',
       '',
-      'AUTHORITY: Level 1 limit is ' + authority.limit + ' rupees per spend or commitment; above it needs both founders. Emergency authority: ' + authority.emergency + ' Founder absence: ' + authority.absence,
+      'AUTHORITY: Level 1 limit is ' + authority.limit + ' rupees per spend or commitment; above it needs all founders. Emergency authority: ' + authority.emergency + ' Founder absence: ' + authority.absence,
       'Responsibility matrix: ' + (authority.matrix || []).map(row => row.area + ' = ' + row.who + ' (Level ' + row.lvl + ')').join('; '),
       '',
       'RULES:',
@@ -949,7 +945,7 @@ export default class HQCompanies extends HQDocEditor {
       ...pendingAmendments,
       ...activeExceptions,
       '',
-      'Question from ' + (PEOPLE[this.state.me] || PEOPLE.rahul).first + ': ' + question,
+      'Question from ' + (PEOPLE[this.state.me] || PEOPLE.both).first + ': ' + question,
     ].join('\n');
 
     this.setState({ cxbusy: true, cxnote: 'Reading the constitution…' });

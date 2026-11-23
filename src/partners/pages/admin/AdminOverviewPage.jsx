@@ -8,6 +8,7 @@ import { DEFAULT_COMMISSION_RATE } from '@/partners/lib/constants';
 import { short } from '@/partners/lib/format';
 import { earnings, pipeline } from '@/partners/lib/metrics';
 import { ST, STATUSES, overdue, today } from '@/partners/lib/acquisition';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 
 const KINDS = [
   { kind: 'scope', label: 'Scope reviews', icon: 'fileCheck', open: ['review'] },
@@ -19,16 +20,20 @@ const KINDS = [
 export default function AdminOverview() {
   const cfg = usePipeline();
   const navigate = useNavigate();
-  const users = useApi('/admin/users');
-  const leads = useApi('/leads');
-  const projects = useApi('/projects');
-  const acq = useApi('/admin/acquisition');
+  // Each card needs View on its own section; the overview only shows what the role can see.
+  const can = usePpCan();
+  const see = { partners: can('pp_partners'), leads: can('pp_leads'), projects: can('pp_projects'), acq: can('pp_acq'), reqs: can('pp_requests') };
+  const users = useApi(see.partners ? '/admin/users' : null);
+  const leads = useApi(see.leads ? '/leads' : null);
+  const projects = useApi(see.projects ? '/projects' : null);
+  const acq = useApi(see.acq ? '/admin/acquisition' : null);
   const reqs = {
-    scope: useApi('/requests/scope'),
-    booking: useApi('/requests/booking'),
-    tech: useApi('/requests/tech'),
-    ticket: useApi('/requests/ticket'),
+    scope: useApi(see.reqs ? '/requests/scope' : null),
+    booking: useApi(see.reqs ? '/requests/booking' : null),
+    tech: useApi(see.reqs ? '/requests/tech' : null),
+    ticket: useApi(see.reqs ? '/requests/ticket' : null),
   };
+  const nothing = !Object.values(see).some(Boolean);
 
   const partners = (users.data?.users ?? []).filter(u => u.role === 'partner');
   const allLeads = leads.data?.leads ?? [];
@@ -50,17 +55,18 @@ export default function AdminOverview() {
   return (
     <>
       <PageHeader eyebrow="Admin" title="Overview" subtitle="All partners, pipeline and payouts across Mariox." />
-      <Stats>
-        <StatCard icon="users" tone="info" label="Partners" value={partners.length} hint={`${partners.filter(p => p.status === 'active').length} active`}
-          href="/partners/admin/partners?status=active" info="All partner accounts. Opens the active partners." />
-        <StatCard icon="pipe" tone="fire" label="Open pipeline" value={short(pipe.openValue)} hint={`${pipe.open} leads`}
-          href={`/partners/admin/leads?view=list&stage=${openKeys}&sort=-value`} info="Deal value of every lead, across all partners, that is not Won or Lost." />
-        <StatCard icon="trophy" tone="good" label="Won" value={short(pipe.wonValue)} hint={`${pipe.won} deals · ${pipe.winRate}% win rate`} good
-          href={`/partners/admin/leads?view=list&stage=${WON}&sort=-value`} info="Deal value of Won leads. Win rate = Won ÷ (Won + Lost)." />
-      </Stats>
-      <div className="eyebrow" style={{ marginTop: 4 }}>Waiting on Mariox</div>
-      <Stats>
-        {KINDS.map(k => (
+      {nothing && <Card title="Nothing to show yet" subtitle="Your role can open the overview, but none of the sections it summarises (partners, leads, projects, requests, acquisition). Ask a Super Admin to add them in Users & roles." />}
+      {(see.partners || see.leads) && <Stats>
+        {see.partners && <StatCard icon="users" tone="info" label="Partners" value={partners.length} hint={`${partners.filter(p => p.status === 'active').length} active`}
+          href="/partners/admin/partners?status=active" info="All partner accounts. Opens the active partners." />}
+        {see.leads && <StatCard icon="pipe" tone="fire" label="Open pipeline" value={short(pipe.openValue)} hint={`${pipe.open} leads`}
+          href={`/partners/admin/leads?view=list&stage=${openKeys}&sort=-value`} info="Deal value of every lead, across all partners, that is not Won or Lost." />}
+        {see.leads && <StatCard icon="trophy" tone="good" label="Won" value={short(pipe.wonValue)} hint={`${pipe.won} deals · ${pipe.winRate}% win rate`} good
+          href={`/partners/admin/leads?view=list&stage=${WON}&sort=-value`} info="Deal value of Won leads. Win rate = Won ÷ (Won + Lost)." />}
+      </Stats>}
+      {(see.reqs || see.acq) && <div className="eyebrow" style={{ marginTop: 4 }}>Waiting on Mariox</div>}
+      {(see.reqs || see.acq) && <Stats>
+        {see.reqs && KINDS.map(k => (
           <StatCard key={k.kind} icon={k.icon} tone="warn" label={k.label}
             value={(reqs[k.kind].data?.items ?? []).filter(i => k.open.includes(i.status)).length}
             hint={`Status: ${k.open.join(' or ')}`}
@@ -72,12 +78,12 @@ export default function AdminOverview() {
             hint="Partner acquisition" href="/partners/admin/acquisition"
             info="Acquisition leads whose meeting or follow-up date has passed: the team needs to update them." />
         )}
-      </Stats>
+      </Stats>}
       {acq.data && <AcquisitionCard leads={acq.data.leads} />}
-      <div className="eyebrow" style={{ marginTop: 4 }}>Partner commissions</div>
-      <EarningsStats e={money} releasedHint="Paid to partners" rateLabel="each partner's rate" hrefFor={() => '/partners/admin/projects'} />
+      {see.projects && <div className="eyebrow" style={{ marginTop: 4 }}>Partner commissions</div>}
+      {see.projects && <EarningsStats e={money} releasedHint="Paid to partners" rateLabel="each partner's rate" hrefFor={() => '/partners/admin/projects'} />}
 
-      <Card title="Partner leaderboard" subtitle="Each partner at their own commission rate · Released = paid out · Pending = client paid, payout not released yet" action={<MoreLink href="/partners/admin/partners">Manage</MoreLink>}>
+      {see.partners && <Card title="Partner leaderboard" subtitle="Each partner at their own commission rate · Released = paid out · Pending = client paid, payout not released yet" action={<MoreLink href="/partners/admin/partners">{can('pp_partners', 'e') ? 'Manage' : 'Open'}</MoreLink>}>
         <DataTable
           rows={board}
           rowKey={p => p.id}
@@ -94,7 +100,7 @@ export default function AdminOverview() {
             { key: 'win', header: 'Win rate', width: '80px', align: 'right', render: p => `${p.winRate}%` },
           ]}
         />
-      </Card>
+      </Card>}
     </>
   );
 }

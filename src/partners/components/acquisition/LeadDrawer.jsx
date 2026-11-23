@@ -10,7 +10,8 @@ import { Av, Avs, NextTxt, Pill } from './bits';
 const STEP_ICON = { contacted: 'send', meeting: 'cal', done: 'check', moved: 'refresh', followup: 'send', converted: 'trophy', onboarding: 'rocket', rejected: 'x' };
 
 // Everything about one lead: contact buttons, meeting, temperature, next step, history, message to send, notes.
-export function LeadDrawer({ lead: l, now, rate, onClose, onUpdate, onEdit, onReopen, onOnboard, onInvite, onDelete, onTemp, onNotes, onToast }) {
+// readOnly (the role can view acquisition but not change it): no edit / update buttons; missing callbacks hide theirs.
+export function LeadDrawer({ lead: l, now, rate, readOnly, onClose, onUpdate, onEdit, onReopen, onOnboard, onInvite, onDelete, onTemp, onNotes, onToast }) {
   const portalHost = usePortalHost();
   const [notes, setNotes] = useState(l.notes || '');
   const [msg, setMsg] = useState(null);
@@ -60,7 +61,7 @@ export function LeadDrawer({ lead: l, now, rate, onClose, onUpdate, onEdit, onRe
             <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
               {l.email && <a className="btn xs" href={`mailto:${l.email}`}><Icon name="mail" size="s" />Email</a>}
               {l.linkedin && <a className="btn xs" href={l.linkedin} target="_blank" rel="noopener noreferrer"><Icon name="linkedin" size="s" />Profile</a>}
-              <button type="button" className="btn xs ghost" onClick={onEdit}><Icon name="note" size="s" />Edit</button>
+              {onEdit && <button type="button" className="btn xs ghost" onClick={onEdit}><Icon name="note" size="s" />Edit</button>}
             </div>
           </div>
 
@@ -82,7 +83,7 @@ export function LeadDrawer({ lead: l, now, rate, onClose, onUpdate, onEdit, onRe
                 </div>
               )}
               <div className="mtc-a">
-                <button type="button" className={`btn sm ${l.meet.invited ? '' : 'ink'}`} onClick={onInvite}><Icon name="send" size="s" />{l.meet.invited ? 'Invite sent · resend' : 'Send the invite'}</button>
+                {onInvite && <button type="button" className={`btn sm ${l.meet.invited ? '' : 'ink'}`} onClick={onInvite}><Icon name="send" size="s" />{l.meet.invited ? 'Invite sent · resend' : 'Send the invite'}</button>}
               </div>
             </div>
           )}
@@ -106,10 +107,10 @@ export function LeadDrawer({ lead: l, now, rate, onClose, onUpdate, onEdit, onRe
             <div className="rq-nx"><NextTxt l={l} now={now} /></div>
             <div className="row" style={{ gap: 6 }}>
               {l.status === 'meeting' && isUrl(l.meet.link) && <a className="btn sm" href={l.meet.link} target="_blank" rel="noopener noreferrer"><Icon name="arrUR" size="s" />Join</a>}
-              {OPEN.includes(l.status) ? <button type="button" className="btn sm fire" onClick={onUpdate}>Update</button>
-                : l.status === 'converted' ? <button type="button" className="btn sm fire" onClick={onOnboard}><Icon name="rocket" size="s" />Start onboarding</button>
+              {OPEN.includes(l.status) ? onUpdate && <button type="button" className="btn sm fire" onClick={onUpdate}>Update</button>
+                : l.status === 'converted' ? onOnboard && <button type="button" className="btn sm fire" onClick={onOnboard}><Icon name="rocket" size="s" />Start onboarding</button>
                 : l.status === 'onboarding' ? <Link className="btn sm" to={partnerHref(l)}><Icon name="users" size="s" />{partner ? `Open ${partner.partnerCode ?? 'partner'}` : 'Open Partners'}</Link>
-                : <button type="button" className="btn sm ghost" onClick={onReopen}>Reopen</button>}
+                : onReopen && <button type="button" className="btn sm ghost" onClick={onReopen}>Reopen</button>}
             </div>
           </div>
 
@@ -151,11 +152,11 @@ export function LeadDrawer({ lead: l, now, rate, onClose, onUpdate, onEdit, onRe
 
           <label className="field">
             <span>Notes</span>
-            <textarea className="inp" rows={3} placeholder="Anything the team should know" value={notes} onChange={e => setNotes(e.target.value)} onBlur={() => notes !== (l.notes || '') && onNotes(notes)} />
+            <textarea className="inp" rows={3} readOnly={readOnly} placeholder="Anything the team should know" value={notes} onChange={e => setNotes(e.target.value)} onBlur={() => notes !== (l.notes || '') && onNotes(notes)} />
           </label>
         </div>
         <div className="dr-f">
-          <button type="button" className="btn sm ghost" onClick={onDelete}><Icon name="trash" size="s" />Delete</button>
+          {onDelete ? <button type="button" className="btn sm ghost" onClick={onDelete}><Icon name="trash" size="s" />Delete</button> : <span />}
           <button type="button" className="btn sm ink" onClick={onClose}>Done</button>
         </div>
       </aside>

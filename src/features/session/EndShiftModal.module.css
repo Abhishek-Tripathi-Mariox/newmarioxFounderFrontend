@@ -77,3 +77,23 @@
   .fuRow { grid-template-columns: 1fr auto; }
   .fuWhen, .fuLate { grid-column: 1 / -1; }
 }
+
+/* Team tasks */
+.ttGrid {
+  display: grid; grid-template-columns: 40px minmax(0, 2fr) 76px minmax(0, 1.6fr) 28px;
+  gap: 8px; align-items: center;
+}
+.ttDone .ttTitle { color: oklch(0.42 0.13 150); }
+.ttTask { min-width: 0; }
+.ttTitle { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttMeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttToProject { color: oklch(0.45 0.12 265); }
+.ttToInternal { color: oklch(0.45 0.12 300); }
+.ttEmpty {
+  font-size: 13px; color: var(--muted); border: 1px dashed var(--divider); border-radius: 10px; padding: 10px 12px;
+}
+.ttAdd { max-width: 340px; }
+@media (max-width: 640px) {
+  .ttGrid { grid-template-columns: 32px minmax(0, 1fr) 76px 28px; }
+  .ttGrid > :nth-child(4) { grid-column: 2 / 4; grid-row: 2; }
+}

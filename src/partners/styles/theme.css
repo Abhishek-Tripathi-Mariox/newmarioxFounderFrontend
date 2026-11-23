@@ -8,7 +8,8 @@
      page: the `:root` / `html` / `body` rules skip it and its token blocks apply to the element itself.
    Edit this file directly; there is no build step. */
 /* Mariox Partners — design system
-   Layout: floating glass top dock + wide bento canvas on desktop; native bottom tab bar + sheets on phones.
+   Layout: wide bento canvas; the app frame (sidebar + header, drawer on phones) is in shell.css and the
+   portal look on top of this file in skin.css.
    Ink-dark hero surfaces, white layered cards, one flame accent; money is green, status is semantic. */
 :root:has(.pp-root:not(.pp-embed)),.pp-root.pp-embed{
   --bg:#eceef2; --bg-2:#e3e6ec; --panel:#ffffff; --panel-2:#f6f7f9; --panel-3:#eff1f4;
@@ -28,7 +29,6 @@
   --mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   --r-sm:10px; --r:16px; --r-lg:22px; --r-xl:28px;
   --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.32,1.28,.48,1); --sheet:cubic-bezier(.32,.72,0,1);
-  --tab:72px;
 }
 @media (prefers-color-scheme:dark){:root:has(.pp-root:not(.pp-embed):not([data-theme="light"])),.pp-root.pp-embed:not([data-theme="light"]){
   --bg:#09090b; --bg-2:#0f1013; --panel:#131418; --panel-2:#181a1f; --panel-3:#1e2026;
@@ -76,26 +76,10 @@ body:has(.pp-root:not(.pp-embed))::before{content:"";position:fixed;inset:0 0 au
 .pp-root .i.s{width:15px;height:15px}.pp-root .i.l{width:22px;height:22px}
 .pp-root .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-/* ---------- top dock ---------- */
-.pp-root .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;padding:14px max(20px,env(safe-area-inset-right,0px)) 0 max(20px,env(safe-area-inset-left,0px));pointer-events:none}
-.pp-root .top-in{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px}
-.pp-root .top-in>*{pointer-events:auto}
-.pp-root .brand{display:flex;align-items:center;gap:10px;justify-self:start;padding:6px 12px 6px 6px;border-radius:14px;transition:background .2s}
-.pp-root .brand:hover{background:var(--glass)}
+/* ---------- brand mark (the app frame itself is in shell.css) ---------- */
 .pp-root .mark{width:34px;height:34px;border-radius:11px;background:var(--hero);color:var(--hero-ink);display:grid;place-items:center;position:relative;overflow:hidden;box-shadow:var(--sh-1)}
 .pp-root .mark b{font:800 17px/1 var(--display);letter-spacing:-.04em}
 .pp-root .mark::after{content:"";position:absolute;right:5px;top:5px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
-.pp-root .brand-t{display:flex;flex-direction:column;line-height:1.1}
-.pp-root .brand-t b{font:700 16px var(--display);letter-spacing:-.02em}
-.pp-root .brand-t span{font-size:11.5px;color:var(--muted)}
-.pp-root .dock{position:relative;display:flex;gap:2px;padding:5px;border-radius:18px;background:var(--glass);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);box-shadow:var(--sh-2),0 0 0 1px var(--line) inset}
-.pp-root .dock-ind{position:absolute;top:5px;bottom:5px;left:0;width:0;border-radius:13px;background:var(--panel);box-shadow:var(--sh-1),0 0 0 1px var(--line);transition:transform .45s var(--spring),width .45s var(--spring);z-index:0}
-.pp-root .dock a{position:relative;z-index:1;display:flex;align-items:center;gap:8px;height:40px;padding:0 15px;border-radius:13px;text-decoration:none;font-weight:500;font-size:14px;color:var(--muted);transition:color .2s;white-space:nowrap}
-.pp-root .dock a:hover{color:var(--ink)}
-.pp-root .dock a.on{color:var(--ink)}
-.pp-root .dock a.on .i{color:var(--accent)}
-.pp-root .dock .bdg{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:#fff;font:600 10.5px/18px var(--sans);text-align:center}
-.pp-root .top-r{justify-self:end;display:flex;align-items:center;gap:8px}
 .pp-root .tbtn{position:relative;height:44px;min-width:44px;padding:0 12px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:var(--sh-1),0 0 0 1px var(--line) inset;color:var(--ink-2);font-weight:500;transition:transform .2s var(--ease),background .2s}
 .pp-root .tbtn:hover{background:var(--panel);color:var(--ink)}
 .pp-root .tbtn:active{transform:scale(.96)}
@@ -103,8 +87,6 @@ body:has(.pp-root:not(.pp-embed))::before{content:"";position:fixed;inset:0 0 au
 .pp-root .ping{position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--panel)}
 .pp-root .ping::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:ping 1.8s var(--ease) infinite}
 @keyframes ping{to{transform:scale(2.6);opacity:0}}
-.pp-root .ava{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font:700 14px var(--display);color:#fff;background:linear-gradient(135deg,var(--accent),#c2340b);box-shadow:var(--sh-2);transition:transform .2s var(--ease)}
-.pp-root .ava:hover{transform:translateY(-1px) rotate(-3deg)}
 
 /* ---------- canvas ---------- */
 .pp-root .main{max-width:1360px;margin:0 auto;padding:28px max(20px,env(safe-area-inset-right,0px)) 96px max(20px,env(safe-area-inset-left,0px));min-height:70vh}
@@ -532,7 +514,7 @@ body.dragging:has(.pp-root){cursor:grabbing;user-select:none}
 .pp-root .range::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:0;box-shadow:0 0 0 1px var(--line-2),0 4px 10px rgba(0,0,0,.2)}
 
 /* ---------- mobile ---------- */
-.pp-root .tabbar,.pp-root .m-only{display:none}
+.pp-root .m-only{display:none}
 .pp-root .sheet{position:fixed;left:0;right:0;bottom:0;z-index:72;background:var(--panel);border-radius:28px 28px 0 0;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:var(--sh-3);animation:sheetin .5s var(--sheet) both;max-height:88vh;overflow-y:auto}
 .pp-root .sheet.out{animation:sheetout .3s var(--ease) both}
 @keyframes sheetin{from{transform:translateY(100%)}}@keyframes sheetout{to{transform:translateY(100%)}}
@@ -542,8 +524,6 @@ body.dragging:has(.pp-root){cursor:grabbing;user-select:none}
 .pp-root .sh-it:active{transform:scale(.95)}
 
 @media (max-width:1180px){
-  .pp-root .dock a span.t{display:none}
-  .pp-root .dock a{padding:0 13px}
   .pp-root .split{grid-template-columns:minmax(0,1fr) 330px}
 }
 @media (max-width:1024px){
@@ -554,11 +534,7 @@ body.dragging:has(.pp-root){cursor:grabbing;user-select:none}
   .pp-root .ob{grid-template-columns:1fr}.pp-root .ob-l{min-height:auto;padding-block:28px}
 }
 @media (max-width:820px){
-  .pp-root .dock,.pp-root .top-r .hide-m,.pp-root .brand-t span{display:none}
-  .pp-root .top{padding-top:10px}
-  .pp-root .top-in{grid-template-columns:1fr auto}
   .pp-root .m-only{display:flex}
-  .pp-root .main{padding-top:18px;padding-bottom:calc(var(--tab) + 40px + env(safe-area-inset-bottom,0px))}
   .pp-root .g2,.pp-root .g3{grid-template-columns:minmax(0,1fr)}
   .pp-root .c3,.pp-root .c4{grid-column:1/-1}
   .pp-root .h-xl{font-size:42px}
@@ -567,7 +543,7 @@ body.dragging:has(.pp-root){cursor:grabbing;user-select:none}
   .pp-root .card{padding:20px;border-radius:20px}
   .pp-root .hero{border-radius:24px}
   .pp-root .ring{width:140px;height:140px}
-  .pp-root .toasts{left:16px;right:16px;bottom:calc(var(--tab) + 22px + env(safe-area-inset-bottom,0px));align-items:stretch}
+  .pp-root .toasts{left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));align-items:stretch}
   .pp-root .toast{min-width:0;max-width:none}
   .pp-root .drawer{top:auto;left:0;right:0;bottom:0;width:100%;height:92vh;border-radius:26px 26px 0 0;animation-name:sheetin}
   .pp-root .drawer.out{animation-name:sheetout}
@@ -579,12 +555,6 @@ body.dragging:has(.pp-root){cursor:grabbing;user-select:none}
   .pp-root .tr .d-only{display:none}
   .pp-root .board{grid-auto-columns:84vw;scroll-snap-type:x mandatory;margin:0 calc(-1 * max(20px,env(safe-area-inset-left,0px)));padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));scroll-padding-left:max(20px,env(safe-area-inset-left,0px))}
   .pp-root .ptl-t small{display:none}.pp-root .ptl-t{font-size:11.5px}
-  .pp-root .tabbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:50;height:calc(var(--tab) + env(safe-area-inset-bottom,0px));padding:6px max(8px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(8px,env(safe-area-inset-left,0px));background:var(--glass);-webkit-backdrop-filter:saturate(1.6) blur(20px);backdrop-filter:saturate(1.6) blur(20px);box-shadow:0 -1px 0 var(--line)}
-  .pp-root .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:600;color:var(--faint);text-decoration:none;position:relative;transition:color .2s}
-  .pp-root .tab .i{width:24px;height:24px;transition:transform .35s var(--spring)}
-  .pp-root .tab.on{color:var(--ink)}
-  .pp-root .tab.on .i{color:var(--accent);transform:translateY(-2px) scale(1.08)}
-  .pp-root .tab .bdg{position:absolute;top:2px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:#fff;font-size:10px;display:grid;place-items:center;box-shadow:0 0 0 2px var(--panel)}
   .pp-root .fab{justify-self:center;align-self:start;margin-top:-20px;width:60px;height:60px;border-radius:20px;background:var(--ink);color:var(--bg);display:grid;place-items:center;box-shadow:var(--sh-3);transition:transform .3s var(--spring)}
   .pp-root .fab:active{transform:scale(.92) rotate(90deg)}
   .pp-root .fab .i{width:26px;height:26px;stroke-width:2.4}

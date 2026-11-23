@@ -4,7 +4,7 @@ import { setTeamTaskDue } from '../teamTasks/hqTeamTasks';
 import { newLeadInHQ } from '../leads/hqLeads';
 import { STATUS_HUE as TEAM_STATUS_HUE } from '@/features/team-tasks/model';
 import { initialsOf } from '@/founders/auth/accounts';
-import { KEY, PEOPLE, COS, coOf, CO_OPTS, OWNER_OPTS, segOf, STATUS, iso, plus, dayDiff, uid, INK_C, RED, AMBER, MUTED, act, GST, DST, DST_LABEL, IMPACT, DX_DEF, goalCalc, parseQuick, normRv, AI_ON } from './core';
+import { KEY, PEOPLE, MEMBERS, memberOpts, ALL_FOUNDERS, COS, coOf, CO_OPTS, OWNER_OPTS, segOf, STATUS, iso, plus, dayDiff, uid, INK_C, RED, AMBER, MUTED, act, GST, DST, DST_LABEL, IMPACT, DX_DEF, goalCalc, parseQuick, normRv, AI_ON } from './core';
 
 /*
  * View model for the Today brief, Goals (list + peek panel + popover menus), Decisions (list + panel),
@@ -52,10 +52,10 @@ const IMPACT_RANK = { High: 0, Medium: 1, Low: 2 };
 
 /** Pages offered under "Go to" in the command bar. */
 const NAV_TARGETS = [
-  ['home', 'Today'], ['brief', 'Chief of staff'], ['tasks', 'Tasks'], ['calendar', 'Calendar'], ['attendance', 'Attendance'],
+  ['home', 'Today'], ['brief', 'Chief of staff'], ['tasks', 'Team tasks'], ['mytasks', 'My tasks'], ['calendar', 'Calendar'], ['attendance', 'Attendance'],
   ['goals', 'Goals'], ['decisions', 'Decisions'], ['review', 'Weekly review'], ['scorecard', 'Scorecard'], ['sync', 'Founders\' sync'],
   ['pipeline', 'Sales pipeline'], ['research', 'Research'], ['finance', 'Finance'], ['contracts', 'Contracts'], ['hiring', 'Hiring'],
-  ['docs', 'Docs & files'], ['vault', 'Vault'], ['companies', 'Companies'], ['constitution', 'Constitution'],
+  ['docs', 'Docs & files'], ['vault', 'Vault'], ['companies', 'Companies'], ['constitution', 'Constitution'], ['users', 'Users & roles'],
 ];
 
 // ─── Small formatting helpers ──────────────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ function buildGoalsListVM(hq, ctx, menus) {
         ['achieved', 'Achieved', GST.Achieved.dot],
       ].map(([bucket, label, dot]) => ({ key: bucket, label, hasTile: false, hasDot: true, dot, tile: '', ini: '', test: g => bucketOf(g) === bucket }))
       : grouping === 'owner'
-        ? OWNER_OPTS.map(([ownerId, label]) => ({ key: ownerId, label: label === 'Both' ? PEOPLE.both.name : label, hasTile: false, hasDot: true, dot: PEOPLE[ownerId].bg, tile: '', ini: '', test: g => g.owner === ownerId }))
+        ? OWNER_OPTS.map(([ownerId, label]) => ({ key: ownerId, label, hasTile: false, hasDot: true, dot: PEOPLE[ownerId].bg, tile: '', ini: '', test: g => g.owner === ownerId }))
         : [{ key: 'all', label: '', hasTile: false, hasDot: false, dot: '', tile: '', ini: '', test: () => true }];
 
   const goalGroups = groupDefs
@@ -509,7 +509,7 @@ function buildGoalsListVM(hq, ctx, menus) {
     };
   };
   const companyOptions = [['any', 'All companies'], ...COS.map(c => [c.id, c.full, c.bg])];
-  const ownerOptions = [['any', 'Anyone'], ['rahul', PEOPLE.rahul.first, PEOPLE.rahul.bg], ['saswat', PEOPLE.saswat.first, PEOPLE.saswat.bg], ['both', 'Both', PEOPLE.both.bg]];
+  const ownerOptions = [['any', 'Anyone'], ...memberOpts()];
 
   /** View preferences (group / sort / layout) persist in localStorage. */
   const savePref = (stateKey, value) => {
@@ -831,7 +831,7 @@ function buildDecisionsVM(hq, ctx) {
       options: [['Proposed', DST_LABEL.Proposed, DST.Proposed.dot], ['Revisit', 'Revisit', DST.Revisit.dot], ['Decided', 'Decided', DST.Decided.dot], ['Dropped', 'Not doing', DST.Dropped.dot]],
     },
     company: { groupOf: d => d.co, options: CO_OPTS.map(([coId, label]) => [coId, label, coOf(coId).bg || 'oklch(0.6 0.01 265)']) },
-    owner: { groupOf: d => d.by, options: OWNER_OPTS.map(([ownerId, label]) => [ownerId, label === 'Both' ? PEOPLE.both.name : label, PEOPLE[ownerId].bg]) },
+    owner: { groupOf: d => d.by, options: OWNER_OPTS.map(([ownerId, label]) => [ownerId, label, PEOPLE[ownerId].bg]) },
     impact: {
       groupOf: d => d.impact || 'Medium',
       options: [['High', 'High impact', IMPACT.High.dot], ['Medium', 'Medium impact', IMPACT.Medium.dot], ['Low', 'Low impact', IMPACT.Low.dot]],
@@ -925,7 +925,7 @@ function buildDecisionsVM(hq, ctx) {
     }),
     filters: [
       filterSelect('status', 'all', [['all', 'Any status'], ['Proposed', 'Status: Needs decision'], ['Decided', 'Status: Decided'], ['Revisit', 'Status: Revisit'], ['Dropped', 'Status: Not doing']]),
-      filterSelect('by', 'any', [['any', 'Any owner'], ['rahul', 'Owner: ' + PEOPLE.rahul.first], ['saswat', 'Owner: ' + PEOPLE.saswat.first], ['both', 'Owner: Both']]),
+      filterSelect('by', 'any', [['any', 'Any owner'], ...memberOpts().map(([id, label]) => [id, 'Owner: ' + label])]),
       filterSelect('impact', 'any', [['any', 'Any impact'], ['High', 'Impact: High'], ['Medium', 'Impact: Medium'], ['Low', 'Impact: Low']]),
       filterSelect('when', 'any', [
         ['any', 'Any time'], ['overdue', 'Past decide-by date'], ['week', 'Decide in next 7 days'], ['revisit', 'Due for revisit'],
@@ -1081,7 +1081,7 @@ function buildDecisionPanelVM(hq, ctx, decision, helpers) {
       bg: isChosen ? 'oklch(0.975 0.02 150)' : '#fff',
       badgeBg: isChosen ? 'oklch(0.55 0.14 150)' : 'oklch(0.95 0.005 85)',
       badgeFg: isChosen ? '#fff' : 'oklch(0.4 0.012 265)',
-      votes: ['rahul', 'saswat'].map(voteButton),
+      votes: MEMBERS.map(voteButton),
       choose,
       chooseLabel: isChosen ? '✓ Chosen' : 'Choose this',
       remove: () => updateDecision(id, target => {
@@ -1210,8 +1210,8 @@ function buildWeeklyReviewVM(hq, ctx) {
   const weekOffset = hq.state.wk; // 0 = this week, -1 = last week, …
   const reviewFilter = hq.state.wrf || { co: 'any', who: 'all' };
 
-  // Company / person filter. Shared ("both") items count for either founder. Team tasks: mine = assigned
-  // to / given by me; the other founder's = assigned to / given by someone with their account name.
+  // Company / person filter. Shared ("both" = all founders) items count for every founder. Team tasks: mine = assigned
+  // to / given by me; another founder's = assigned to / given by someone with their account name.
   const isFoundersTask = (t, who) => (who === me ? t.mine : !!PEOPLE[who] && [t.assignee, t.giver].includes(PEOPLE[who].name));
   const taskInScope = t => (reviewFilter.co === 'any' || t.co === reviewFilter.co) && (reviewFilter.who === 'all' || isFoundersTask(t, reviewFilter.who));
   const decisionInScope = d => (reviewFilter.co === 'any' || d.co === reviewFilter.co) && (reviewFilter.who === 'all' || d.by === reviewFilter.who || d.by === 'both');
@@ -1341,7 +1341,7 @@ function buildWeeklyReviewVM(hq, ctx) {
 
   const priorities = [0, 1, 2].map(i => (review.pri || [])[i] || { text: '', task: '' });
   const stepsFilled = [
-    !!(review.scores && (review.scores.rahul || review.scores.saswat)),
+    !!(review.scores && Object.values(review.scores).some(Boolean)),
     !!(review.wins || '').trim(),
     !!(review.misses || '').trim(),
     !!(review.learned || '').trim(),
@@ -1359,7 +1359,7 @@ function buildWeeklyReviewVM(hq, ctx) {
 
   // Plain-text summary of the week handed to the "Draft notes with Claude" prompt.
   const facts = [
-    'Week: ' + weekLabel + (reviewFilter.co !== 'any' ? ' · company ' + coOf(reviewFilter.co).name : '') + (reviewFilter.who !== 'all' ? ' · person ' + PEOPLE[reviewFilter.who].first : ''),
+    'Week: ' + weekLabel + (reviewFilter.co !== 'any' ? ' · company ' + coOf(reviewFilter.co).name : '') + (reviewFilter.who !== 'all' ? ' · person ' + (PEOPLE[reviewFilter.who] || PEOPLE.both).first : ''),
     'Completed (' + done.length + '): ' + done.map(t => t.title + ' [' + coOf(t.co).name + ']').join('; '),
     'Slipped (' + slipped.length + '): ' + slipped.map(t => t.title + ' [' + coOf(t.co).name + ', due ' + t.due + ']').join('; '),
     'New tasks: ' + created.length,
@@ -1371,8 +1371,8 @@ function buildWeeklyReviewVM(hq, ctx) {
 
   const reviewAsText = () => [
     'Weekly review: ' + weekLabel + (reviewFilter.co !== 'any' ? ' (' + coOf(reviewFilter.co).full + ')' : ''),
-    review.scores && (review.scores.rahul || review.scores.saswat)
-      ? 'Week rating: ' + ['rahul', 'saswat'].filter(p => review.scores[p]).map(p => PEOPLE[p].first + ' ' + review.scores[p] + '/5').join(', ')
+    review.scores && Object.values(review.scores).some(Boolean)
+      ? 'Week rating: ' + Object.keys(review.scores).filter(p => review.scores[p] && PEOPLE[p]).map(p => PEOPLE[p].first + ' ' + review.scores[p] + '/5').join(', ')
       : '',
     'Completed ' + done.length + ' · Slipped ' + slipped.length + ' · New ' + created.length + ' · Decisions ' + decided.length + (rate !== null ? ' · On-time rate ' + rate + '%' : ''),
     review.wins ? 'WINS\n' + review.wins : '',
@@ -1423,9 +1423,9 @@ function buildWeeklyReviewVM(hq, ctx) {
   const scoreRow = personId => {
     const score = (review.scores || {})[personId] || 0;
     return {
-      name: PEOPLE[personId].first,
-      ini: PEOPLE[personId].ini,
-      bg: PEOPLE[personId].bg,
+      name: (PEOPLE[personId] || PEOPLE.both).first,
+      ini: (PEOPLE[personId] || PEOPLE.both).ini,
+      bg: (PEOPLE[personId] || PEOPLE.both).bg,
       opts: [1, 2, 3, 4, 5].map(value => ({
         n: String(value),
         bg: score === value ? 'var(--acc, oklch(0.5 0.17 265))' : '#fff',
@@ -1480,7 +1480,7 @@ function buildWeeklyReviewVM(hq, ctx) {
         go: () => hq.setState({ wrf: { ...reviewFilter, co: coId } }),
       };
     }),
-    whoSeg: segOf([['all', 'Everyone'], ['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first]], reviewFilter.who, value => hq.setState({ wrf: { ...reviewFilter, who: value } })),
+    whoSeg: segOf([['all', 'Everyone'], ...memberOpts(false)], reviewFilter.who, value => hq.setState({ wrf: { ...reviewFilter, who: value } })),
     anyF: reviewFilter.co !== 'any' || reviewFilter.who !== 'all',
     clearF: () => hq.setState({ wrf: { co: 'any', who: 'all' } }),
     status: statusText,
@@ -1520,12 +1520,12 @@ function buildWeeklyReviewVM(hq, ctx) {
       go: () => hq.setState({ wk: weekOffset + i - 5 }),
       tip: formatWeekRange(stats.monday) + ': ' + stats.done.length + ' done, ' + stats.slipped.length + ' slipped',
     })),
-    people: ['rahul', 'saswat', 'both'].map(personId => {
+    people: [...MEMBERS, 'both'].map(personId => {
       const person = PEOPLE[personId];
       const doneCount = done.filter(t => t.owner === personId).length, slippedCount = slipped.filter(t => t.owner === personId).length;
       const barTotal = Math.max(1, done.length);
       return {
-        name: personId === 'both' ? 'Shared' : person.first,
+        name: personId === 'both' ? 'Shared (' + ALL_FOUNDERS.toLowerCase() + ')' : person.first,
         ini: person.ini,
         bg: person.bg,
         done: doneCount + ' done',
@@ -1534,7 +1534,8 @@ function buildWeeklyReviewVM(hq, ctx) {
         w: Math.round(doneCount / barTotal * 100) + '%',
       };
     }),
-    scores: ['rahul', 'saswat'].map(scoreRow),
+    // Past ratings by people who are no longer members still show.
+    scores: [...MEMBERS, ...Object.keys(review.scores || {}).filter(p => !MEMBERS.includes(p) && review.scores[p] && PEOPLE[p])].map(scoreRow),
     wins: review.wins || '',
     onWins: e => setReviewField('wins', e.target.value),
     misses: review.misses || '',
@@ -1655,6 +1656,8 @@ function buildCommandBarVM(hq, ctx) {
 
     // Search results (open tasks first).
     const taskMatches = ctx.tasks.filter(t => (t.title || '').toLowerCase().includes(queryLower)).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0)).slice(0, 6);
+    // My tasks: the founders' own tasks (open in the My tasks page).
+    const myTaskMatches = (data.tasks || []).filter(t => (t.title || '').toLowerCase().includes(queryLower)).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0)).slice(0, 4);
     const pageMatches = data.pages.filter(page => !page.trashed && ((page.title || '') + ' ' + (page.blocks || []).map(b => b.text).join(' ')).toLowerCase().includes(queryLower)).slice(0, 4);
     const goalMatches = data.goals.filter(g => (g.title || '').toLowerCase().includes(queryLower)).slice(0, 3);
     const decisionMatches = data.decisions.filter(d => [d.title, d.outcome].join(' ').toLowerCase().includes(queryLower)).slice(0, 3);
@@ -1665,10 +1668,20 @@ function buildCommandBarVM(hq, ctx) {
     const companyMatches = COS.filter(c => c.full.toLowerCase().includes(queryLower));
 
     if (taskMatches.length) {
-      addHeading('Tasks');
+      addHeading('Team tasks');
       taskMatches.forEach(t => {
         const company = coOf(t.co);
         addItem(t.done ? '✓' : '○', company.tint, company.ink, t.title || 'Untitled task', company.name + ' · ' + t.status + (t.due ? ' · due ' + formatShortDate(t.due) : ''), '', () => openTask(t.id));
+      });
+    }
+    if (myTaskMatches.length) {
+      addHeading('My tasks');
+      myTaskMatches.forEach(t => {
+        const company = coOf(t.co);
+        addItem(t.done ? '✓' : '○', company.tint, company.ink, t.title || 'Untitled task', company.name + ' · ' + (t.status || 'Not started') + (t.due ? ' · due ' + formatShortDate(t.due) : ''), '', () => {
+          closeBar();
+          hq.go('mytasks', { tpeek: t.id });
+        });
       });
     }
     if (goalMatches.length) {
@@ -1743,7 +1756,6 @@ export default class HQGoalsDecisionsReview extends HQState {
   goalsDecisionsReviewViewModel() {
     const { data, me, view } = this.state;
     const now = new Date();
-    const other = me === 'rahul' ? 'saswat' : 'rahul';
     // Team tasks are HQ's only tasks: every one the founder can see, and the ones assigned to / given by them.
     const tasks = this.tasksAll();
     const allOpen = tasks.filter(t => !t.done);
@@ -1771,7 +1783,7 @@ export default class HQGoalsDecisionsReview extends HQState {
       };
     };
 
-    const ctx = { data, me, other, now, tasks, allOpen, myOpen, openTask, goalStats, taskItem };
+    const ctx = { data, me, now, tasks, allOpen, myOpen, openTask, goalStats, taskItem };
     const br = buildBriefVM(this, ctx);
 
     // Goals: list, peek panel and the popover menus both of them register.

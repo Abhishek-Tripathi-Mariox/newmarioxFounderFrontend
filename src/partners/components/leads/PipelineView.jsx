@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { DynamicForm } from '@/partners/components/forms/DynamicForm';
 import { usePipeline } from '@/partners/components/SettingsProvider';
 import { useUser } from '@/partners/components/UserProvider';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 import { Button, Chips, Icon, Modal, PageHeader, Pagination, SearchInput, Select, Tabs, useToast } from '@/partners/components/ui';
 import { useApi } from '@/partners/hooks/useApi';
 import { useList } from '@/partners/hooks/useList';
@@ -34,6 +35,9 @@ export function PipelineView({ admin, partnerId }) {
   const navigate = useNavigate();
   const { search } = useLocation();
   const { user } = useUser();
+  // Admins: by their role's "Leads" permission (partners always work their own leads).
+  const ppCan = usePpCan();
+  const may = (act) => !admin || ppCan('pp_leads', act);
   const cfg = usePipeline();
   const [view, setView] = useState('board');
   const [adding, setAdding] = useState(false);
@@ -114,7 +118,7 @@ export function PipelineView({ admin, partnerId }) {
   }
 
   // Commission so far, from the same (cached) projects data as Home and Earnings.
-  const projects = useApi(partnerId ? `/projects?owner=${partnerId}` : '/projects');
+  const projects = useApi(admin && !ppCan('pp_projects') ? null : partnerId ? `/projects?owner=${partnerId}` : '/projects');
   const money = earnings(projects.data?.projects ?? [], user?.commissionRate ?? DEFAULT_COMMISSION_RATE);
   const commission = projects.data
     ? { released: money.released, processing: money.processing, future: money.future, href: admin ? '/partners/admin/projects' : '/partners/earnings', admin }
@@ -166,7 +170,7 @@ export function PipelineView({ admin, partnerId }) {
           eyebrow={admin ? 'Admin · Sales CRM' : 'Sales CRM'}
           title={admin ? 'All leads' : 'Pipeline'}
           subtitle={admin ? "Every partner's pipeline. Open a lead to edit, move, reassign or delete it." : 'Track every lead, follow-up and conversation until the deal closes.'}
-          actions={<>{viewTabs}<Button variant="fire" icon="plus" onClick={() => setAdding(true)}>Add lead</Button></>}
+          actions={<>{viewTabs}{may('c') && <Button variant="fire" icon="plus" onClick={() => setAdding(true)}>Add lead</Button>}</>}
         />
       )}
 
@@ -193,7 +197,7 @@ export function PipelineView({ admin, partnerId }) {
         </div>
       )}
 
-      {view === 'board' && <LeadBoard leads={boardLeads} rate={rateOf} hrefBase={base} showOwner={admin && !embedded} onMove={move} />}
+      {view === 'board' && <LeadBoard leads={boardLeads} rate={rateOf} hrefBase={base} showOwner={admin && !embedded} onMove={may('e') ? move : undefined} />}
       {view === 'list' && (
         <LeadTable
           leads={list.items}
@@ -217,7 +221,7 @@ export function PipelineView({ admin, partnerId }) {
                 </div>
                 {items.length ? (
                   items.map(({ task, lead }) => (
-                    <TaskRow key={task._id} task={task} company={admin ? `${lead.company} · ${lead.owner?.name ?? ''}` : lead.company} href={`${base}/${lead._id}`} onToggle={() => toggle(lead._id, task._id)} />
+                    <TaskRow key={task._id} task={task} company={admin ? `${lead.company} · ${lead.owner?.name ?? ''}` : lead.company} href={`${base}/${lead._id}`} onToggle={() => toggle(lead._id, task._id)} readOnly={!may('e')} />
                   ))
                 ) : (
                   <div className="sub" style={{ padding: '12px 0' }}>Nothing here</div>

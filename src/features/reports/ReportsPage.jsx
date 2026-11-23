@@ -8,6 +8,7 @@ import RangeFilter from '@/features/attendance/shared/RangeFilter';
 import sh from '@/features/attendance/shared/shared.module.css';
 import { ATT_TEAMS } from '@/features/attendance/useAttendanceModel';
 import { useReportsModel } from './useReportsModel';
+import { hasTeamView, isOwnSession } from '@/domain/permissions';
 import TimelineView from './components/TimelineView';
 import TimelinePopover from './components/TimelinePopover';
 import HoursLog from './components/HoursLog';
@@ -24,7 +25,8 @@ export default function ReportsPage() {
   const { RF, timeline: tl, log, popover } = useReportsModel(now, pop);
   const setRepF = useStore((st) => st.setRepF);
   const flash = useStore((st) => st.flash);
-  const ceoView = useStore((st) => !st.viewAs);
+  // CSV export: "Attendance & reports" View, for the people in their scope (not while previewing).
+  const ceoView = useStore((st) => isOwnSession(st) && hasTeamView(st));
   const [exporting, setExporting] = useState(false);
   const exportCsv = async () => {
     if (exporting) return;

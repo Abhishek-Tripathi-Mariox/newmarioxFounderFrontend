@@ -53,14 +53,45 @@ export const MODULES = [
   ['team', 'Team & hours', 'Hours and allocation per person'],
   ['users', 'Users & roles', 'Users, roles and permissions'],
   ['tt', 'Team tasks', 'Give and track tasks · Team = self + people who report to them · All = everyone'],
-  ['att', 'Attendance & reports', 'Check-ins, breaks, end-of-shift reports, internal work · Team = people who report to them'],
-  ['pp', 'Partners', 'Partner portal admin console · View = open it, Edit = change partners, leads, payouts and settings'],
+  ['att', 'Attendance & reports', 'Check-ins, breaks, end-of-shift reports, internal work, CSV export · Edit = check people in / out, breaks and timers · Team = people who report to them'],
+  // Partner portal admin console (/partners/admin): one module per section.
+  ['pp_overview', 'Overview', 'Partner network at a glance (shows only the sections below the role can view)'],
+  ['pp_acq', 'Acquisition', 'Partner recruitment funnel · Create = add / import leads · Edit = update, convert, board lists'],
+  ['pp_partners', 'Partners', 'Partner accounts, commission rate, KYC · Create = invite · Edit = profile, rate, status, password'],
+  ['pp_leads', 'Leads', 'Leads of every partner · Edit = update, reassign'],
+  ['pp_projects', 'Projects & payouts', 'Partner projects, payments and commission payouts'],
+  ['pp_requests', 'Requests', 'Scope approvals, office visits, tech requests, support tickets · Edit = review / reply'],
+  ['pp_kit', 'Sales kit', 'Decks, case studies and videos for partners'],
+  ['pp_settings', 'Settings', 'Pipeline stages, announcement, contacts · Edit = publish'],
 ];
 
-/** Actions a module offers when it doesn't use all of View / Create / Edit / Delete. */
-export const MODULE_ACTIONS = { att: ['v'], pp: ['v', 'e'] };
-/** Modules without a data scope (All / Team / Own). */
-export const NO_SCOPE_MODULES = ['pp'];
+/** Module groups in the role editor: [title, first module key]. */
+export const MODULE_GROUPS = [['Team portal', 'dash'], ['Partner portal (admin console)', 'pp_overview']];
+
+/** Partner portal admin modules (any with View opens /partners/admin). */
+export const PARTNER_MODULES = MODULES.map(([k]) => k).filter((k) => k.startsWith('pp_'));
+
+/**
+ * Actions a module offers when it doesn't use all of View / Create / Edit / Delete (same as the
+ * server, backend/src/core/permissions.js). The missing ones show as "—" with the reason below.
+ */
+export const MODULE_ACTIONS = {
+  dash: ['v'], projects: ['v', 'c', 'e'], ts: ['v', 'c', 'e'], team: ['v'], att: ['v', 'e'],
+  pp_overview: ['v'], pp_requests: ['v', 'e', 'd'], pp_settings: ['v', 'e'],
+};
+/** Why an action is "—" (tooltip). */
+export const MISSING_ACTION_NOTE = {
+  dash: 'The dashboard is read-only',
+  projects: { d: 'Projects aren’t deleted: removing milestones, members or change requests is Edit' },
+  ts: { d: 'Deleting a time entry is part of Edit' },
+  team: 'Team & hours is read-only (allocations are changed under Projects → Edit)',
+  att: { c: 'Attendance comes from check-ins: there are no manual entries', d: 'Attendance events can’t be deleted' },
+  pp_overview: 'The overview is read-only',
+  pp_requests: { c: 'Partners raise requests; admins review them (Edit)' },
+  pp_settings: { c: 'Settings are edited and published, not created', d: 'Settings are edited and published, not deleted' },
+};
+/** Modules without a data scope (All / Team / Own): partner records belong to partners, not to staff. */
+export const NO_SCOPE_MODULES = PARTNER_MODULES;
 
 export const REMINDERS = [
   [0, 'No reminder'], [5, '5 min before'], [10, '10 min before'], [30, '30 min before'], [60, '1 hour before'], [1440, '1 day before'],

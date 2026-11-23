@@ -1,11 +1,10 @@
 /* Converted from the Founders HQ prototype (CEO Portal/netlify-site/index.html). */
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useState } from 'react';
 import { show, attr, inlineStyle, asList, inputValue } from './rt';
 import AssistantPanel from './sections/AssistantPanel';
 import Attendance from './sections/Attendance';
 import Calendar from './sections/Calendar';
 import Companies from './sections/Companies';
-import SummaryPage from '../../summary/SummaryPage';
 import Constitution from './sections/Constitution';
 import Contracts from './sections/Contracts';
 import Decisions from './sections/Decisions';
@@ -22,8 +21,18 @@ import Scorecard from './sections/Scorecard';
 import Settings from './sections/Settings';
 import FoundersSync from './sections/FoundersSync';
 import TasksHub from './sections/TasksHub';
+import MyTasks from './sections/MyTasks';
+import MyTaskPanel from './sections/MyTaskPanel';
 import { useAttendanceInCount, useOpenTeamTaskCount } from '../teamTasks/portalBridge';
 import Vault from './sections/Vault';
+import { useStore } from '@/store';
+import { firstProjectsTab } from '@/domain/permissions';
+import { INTERNAL_HOME, INTERNAL_NAV, PARTNER_HOME, PARTNER_NAV, internalItemActive, partnerItemActive } from '../portal/marioxNav';
+
+// Mariox's portals open inside HQ on first use (they bring the portal's / partner app's own pages).
+const InternalPortalHost = lazy(() => import('../portal/InternalPortalHost'));
+const PartnersAdminEmbed = lazy(() => import('@/partners/embed/PartnersAdminEmbed'));
+const hostBox = { background: '#fff', border: '1px solid oklch(0.915 0.006 85)', borderRadius: '12px', padding: '36px 16px', textAlign: 'center', fontSize: '13.5px', color: 'oklch(0.52 0.012 265)' };
 
 /** Phone/tablet sidebar: hidden off-screen until the menu button opens it (see styles/responsive.css). */
 function useMobileNav() {
@@ -40,13 +49,42 @@ function useMobileNav() {
     close: () => setOpen(false),
     // Picking any item in the sidebar closes it.
     closeOnPick: (event) => {
-      if (event.target.closest('button, a')) setOpen(false);
+      const picked = event.target.closest('button, a');
+      if (picked && !picked.hasAttribute('data-nav-toggle')) setOpen(false);
     },
   };
 }
 
+/** Open / closed marker of a sidebar group. */
+function Chevron({ open }) {
+  return (
+    <span aria-hidden="true" style={inlineStyle(`display:inline-block;font-size:10px;color:oklch(0.72 0.02 265);transition:transform .15s;transform:rotate(${open ? '90deg' : '0deg'})`)}>{'\u25B8'}</span>
+  );
+}
+
 export default function Root({ vm }) {
   const mobileNav = useMobileNav();
+  const pjTab = useStore((x) => x.pj?.tab);
+  const mariox = asList(vm.coNav).find((company) => company?.portals);
+  const mxApp = (mariox && mariox.mxApp) || null; // portal whose page is open: 'internal' | 'partner' | null
+  // Companies → Mariox opens and closes its two portals; each portal opens and closes its pages.
+  // Whatever is open in the main area stays open in the sidebar.
+  const [mxOpen, setMxOpen] = useState(!!mxApp);
+  const [portalOpen, setPortalOpen] = useState(mxApp);
+  useEffect(() => {
+    if (!mxApp) return;
+    setMxOpen(true);
+    setPortalOpen(mxApp);
+  }, [mxApp]);
+  const togglePortal = (app, home) => {
+    if (portalOpen === app) { setPortalOpen(null); return; }
+    setPortalOpen(app);
+    if (mxApp !== app) mariox.goMxPage(app, home);
+  };
+  const openPage = (app, item) => {
+    if (item.pj) useStore.getState().setPj({ tab: item.pj === 'first' ? firstProjectsTab(useStore.getState()) : item.pj });
+    mariox.goMxPage(app, item.path);
+  };
   const teamTaskCount = useOpenTeamTaskCount(); // sidebar Tasks badge: my open team tasks, live from the portal store
   const attInCount = useAttendanceInCount(); // sidebar Attendance badge: portal store while fresh, else the founder summary
   const navCount = (item) => (item?.id === 'tasks' && teamTaskCount != null ? String(teamTaskCount)
@@ -115,109 +153,41 @@ export default function Root({ vm }) {
           {asList(vm.coNav).map((company, index) => (<Fragment key={index}>
             {' '}
             {company?.portals ? (<>
-              <button onClick={company?.goMx} style={inlineStyle(`display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:500;cursor:pointer;text-align:left;color:oklch(0.9 0.01 265);background:${attr(company?.mxBg)}`)}>
+              <button type="button" data-nav-toggle onClick={() => setMxOpen(!mxOpen)} aria-expanded={mxOpen} title={mxOpen ? 'Hide Mariox portals' : 'Show Mariox portals'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', border: '0', borderRadius: '8px', padding: '8px 10px', fontSize: '13.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left', color: 'oklch(0.9 0.01 265)', background: 'transparent' }} className="scp1">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                   <span style={inlineStyle(`width:20px;height:20px;border-radius:5px;background:${attr(company?.bg)};display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff`)}>
                     {show(company?.ini)}
                   </span>
                   {show(company?.name)}
                 </span>
-                <span style={{ fontSize: '11.5px', color: 'oklch(0.78 0.08 150)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'oklch(0.78 0.08 150)' }}>
                   {'2 portals'}
+                  <Chevron open={mxOpen} />
                 </span>
               </button>
-              <div style={inlineStyle(`display:flex;align-items:center;gap:2px;border-radius:8px;background:${attr(company?.mxInternalBg)}`)}>
-                <button onClick={company?.goMxInternal} title="Mariox internal portal: sales, projects, team" style={{
-                    flex: '1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: '0',
-                    borderRadius: '8px',
-                    padding: '6px 10px 6px 39px',
-                    fontSize: '12.5px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    color: 'oklch(0.78 0.015 265)',
-                    background: 'transparent',
-                  }} className="scp1">
-                  <span>{'Internal portal'}</span>
-                </button>
-                <a href={company?.internalUrl} title="Open the internal portal app" aria-label="Open the internal portal app" style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    width: '28px',
-                    height: '28px',
-                    flexShrink: '0',
-                    borderRadius: '7px',
-                    fontSize: '13px',
-                    color: 'oklch(0.78 0.08 150)',
-                    textDecoration: 'none',
-                  }} className="scp1">{'↗'}</a>
-              </div>
-              <div style={inlineStyle(`display:flex;align-items:center;gap:2px;border-radius:8px;background:${attr(company?.mxPartnersBg)}`)}>
-                <button onClick={company?.goMxPartners} title="Mariox partner portal: partners, commission, requests" style={{
-                    flex: '1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: '0',
-                    borderRadius: '8px',
-                    padding: '6px 10px 6px 39px',
-                    fontSize: '12.5px',
-                    fontWeight: '500',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    color: 'oklch(0.78 0.015 265)',
-                    background: 'transparent',
-                  }} className="scp1">
-                  <span>{'Partner portal'}</span>
-                </button>
-                <a href={company?.partnersUrl} title="Open the partner portal app" aria-label="Open the partner portal app" style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    width: '28px',
-                    height: '28px',
-                    flexShrink: '0',
-                    borderRadius: '7px',
-                    fontSize: '13px',
-                    color: 'oklch(0.78 0.08 150)',
-                    textDecoration: 'none',
-                  }} className="scp1">{'↗'}</a>
-              </div>
-              {[
-                { go: company?.goMxUsers, bg: company?.mxUsersBg, url: company?.usersUrl, label: 'Users & roles', title: 'Mariox users, roles and permissions (internal portal)', open: 'Open Users & roles in the internal portal app' },
-                { go: company?.goMxPartnerAdmin, bg: company?.mxPartnerAdminBg, url: company?.partnerAdminUrl, label: 'Partners', title: 'Mariox partners: accounts, commission, KYC (partner portal admin)', open: 'Open Partners in the partner portal app' },
-              ].map((item) => (
-                <div key={item.label} style={inlineStyle(`display:flex;align-items:center;gap:2px;border-radius:8px;background:${attr(item.bg)}`)}>
-                  <button onClick={item.go} title={item.title} style={{
-                      flex: '1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      border: '0',
-                      borderRadius: '8px',
-                      padding: '6px 10px 6px 39px',
-                      fontSize: '12.5px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      color: 'oklch(0.78 0.015 265)',
-                      background: 'transparent',
-                    }} className="scp1">
-                    <span>{item.label}</span>
+              {mxOpen ? [
+                { app: 'internal', label: 'Internal portal', title: 'Mariox internal portal: live, attendance, sales, projects, team', home: INTERNAL_HOME, items: INTERNAL_NAV, active: (item) => internalItemActive(item, company?.mxPath, pjTab) },
+                { app: 'partner', label: 'Partner portal', title: 'Mariox partner portal: partners, leads, projects, payouts, requests', home: PARTNER_HOME, items: PARTNER_NAV, active: (item) => partnerItemActive(item, company?.mxPath) },
+              ].map((portal) => (
+                <Fragment key={portal.app}>
+                  <button type="button" data-nav-toggle onClick={() => togglePortal(portal.app, portal.home)} aria-expanded={portalOpen === portal.app} title={portal.title} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '0', borderRadius: '8px', margin: '2px 0', padding: '8px 10px 8px 39px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', textAlign: 'left', color: mxApp === portal.app ? '#fff' : 'oklch(0.82 0.015 265)', background: 'transparent' }} className="scp1">
+                    <span>{portal.label}</span>
+                    <Chevron open={portalOpen === portal.app} />
                   </button>
-                  <a href={item.url} title={item.open} aria-label={item.open} style={{
-                      display: 'grid',
-                      placeItems: 'center',
-                      width: '28px',
-                      height: '28px',
-                      flexShrink: '0',
-                      borderRadius: '7px',
-                      fontSize: '13px',
-                      color: 'oklch(0.78 0.08 150)',
-                      textDecoration: 'none',
-                    }} className="scp1">{'↗'}</a>
-                </div>
-              ))}
+                  {portalOpen === portal.app ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '2px 0 8px 44px', paddingLeft: '8px', borderLeft: '1px solid oklch(1 0 0 / 0.12)' }}>
+                      {portal.items.map((item) => {
+                        const on = mxApp === portal.app && portal.active(item);
+                        return (
+                          <button type="button" key={item.label} onClick={() => openPage(portal.app, item)} aria-current={on ? 'page' : undefined} style={inlineStyle(`display:flex;align-items:center;border:0;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:${on ? 600 : 500};line-height:1.25;cursor:pointer;text-align:left;color:${on ? '#fff' : 'oklch(0.76 0.015 265)'};background:${on ? attr(company?.activeBg) : 'transparent'}`)} className="scp1">
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </Fragment>
+              )) : null}
             </>) : null}
             {company?.live ? (<>
               <a href={company?.href} style={{
@@ -495,7 +465,13 @@ export default function Root({ vm }) {
         <div className="hq-content" style={{ padding: '24px 28px 56px', display: 'flex', flexDirection: 'column', gap: '18px', width: '100%' }}>
           {' '}
           {vm.isCompanies ? <Companies vm={vm} /> : null}
-          {vm.isSummary ? <SummaryPage tab={vm.mxTab} onTab={vm.setMxTab} links={vm.mxLinks} viewerName={vm.mxViewerName} /> : null}
+          {vm.isSummary ? (
+            <Suspense fallback={<div style={hostBox} role="status">Loading…</div>}>
+              {vm.mxApp === 'partner'
+                ? <PartnersAdminEmbed key="partner" path={vm.mxPath || PARTNER_HOME} onPath={vm.setMxPath} />
+                : <InternalPortalHost key="internal" path={vm.mxPath || INTERNAL_HOME} onPath={vm.setMxPath} />}
+            </Suspense>
+          ) : null}
           {' '}
           {vm.isConstitution ? <Constitution vm={vm} /> : null}
           {' '}
@@ -770,6 +746,13 @@ export default function Root({ vm }) {
           {vm.isReview ? <WeeklyReview vm={vm} /> : null}
           {' '}
           {vm.isTasks ? <TasksHub vm={vm} /> : null}
+          {' '}
+          {vm.isMyTasks ? <MyTasks vm={vm} /> : null}
+          {vm.isUsers ? (
+            <Suspense fallback={<div style={hostBox} role="status">Loading…</div>}>
+              <InternalPortalHost key="users" path="/users" />
+            </Suspense>
+          ) : null}
           {' '}
           {vm.isResearch ? <Research vm={vm} /> : null}
           {' '}
@@ -1169,6 +1152,50 @@ export default function Root({ vm }) {
           {' '}
         </>) : null}
         {' '}
+        {' '}
+        {vm.tk?.menuOpen ? (<>
+          {' '}
+          <div style={inlineStyle(`position:fixed;top:${attr(vm.tk?.popTop)};bottom:${attr(vm.tk?.popBottom)};left:${attr(vm.tk?.popX)};z-index:60;min-width:220px;background:#fff;border:1px solid oklch(0.9 0.006 85);border-radius:10px;box-shadow:0 12px 32px oklch(0.2 0.02 265 / 0.16);padding:5px;display:flex;flex-direction:column;gap:1px`)}>
+            {' '}
+            {vm.tk?.hasMenuTitle ? (<>
+              <div style={{
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  color: 'oklch(0.52 0.012 265)',
+                  padding: '6px 10px 4px',
+                }}>
+                {show(vm.tk?.menuTitle)}
+              </div>
+            </>) : null}
+            {' '}
+            {asList(vm.tk?.menu).map((menuItem, index) => (<Fragment key={index}>
+              <button onClick={menuItem?.go} style={inlineStyle(`display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;background:${attr(menuItem?.bg)};padding:8px 10px;border-radius:7px;font-size:13.5px;cursor:pointer;text-align:left`)} className="scp2d">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                  {menuItem?.hasDot ? (<>
+                    <span style={inlineStyle(`width:9px;height:9px;border-radius:50%;background:${attr(menuItem?.dot)};flex-shrink:0`)} />
+                  </>) : null}
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    <span style={{ fontWeight: '500' }}>
+                      {show(menuItem?.label)}
+                    </span>
+                    {menuItem?.hasDesc ? (<>
+                      <span style={{ fontSize: '11.5px', color: 'oklch(0.52 0.012 265)' }}>
+                        {show(menuItem?.desc)}
+                      </span>
+                    </>) : null}
+                  </span>
+                </span>
+                <span style={{ color: 'var(--acc, oklch(0.5 0.17 265))', fontSize: '13px', fontWeight: '700' }}>
+                  {show(menuItem?.mark)}
+                </span>
+              </button>
+            </Fragment>))}
+            {' '}
+          </div>
+          {' '}
+        </>) : null}
+        {' '}
+        {vm.hasTPeek ? <MyTaskPanel vm={vm} /> : null}
         {' '}
         {vm.cmd?.open ? (<>
           {' '}

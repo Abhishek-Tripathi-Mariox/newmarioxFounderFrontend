@@ -318,7 +318,7 @@ export default function Decisions({ vm }) {
             {show(vm.dl?.emptyTitle)}
           </span>
           <span style={{ fontSize: '13.5px', color: 'oklch(0.52 0.012 265)', maxWidth: '440px', lineHeight: '1.5' }}>
-            {'Log open questions as Needs decision. Once both founders agree, mark them Decided with the reason, so nobody has to remember why.'}
+            {'Log open questions as Needs decision. Once all founders agree, mark them Decided with the reason, so nobody has to remember why.'}
           </span>
           {vm.dl?.emptyFilter ? (<>
             <button onClick={vm.dl?.clear} style={{

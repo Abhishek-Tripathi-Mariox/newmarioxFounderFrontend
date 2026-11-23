@@ -1,7 +1,7 @@
 import { DynamicForm } from '@/partners/components/forms/DynamicForm';
 import { VisitingCard } from '@/partners/components/PartnerCard';
 import { useUser } from '@/partners/components/UserProvider';
-import { AppearanceCard, PasswordCard, SessionsCard } from '@/partners/components/account/SecurityCard';
+import { PasswordCard, SessionsCard } from '@/partners/components/account/SecurityCard';
 import { Card, Icon, Note, PageHeader, Tabs, useToast } from '@/partners/components/ui';
 import { useAccountTab } from '@/partners/hooks/useAccountTab';
 import { useApi } from '@/partners/hooks/useApi';
@@ -44,7 +44,6 @@ export default function ProfilePage() {
           <PasswordCard />
           <div className="stack stick" style={{ gap: 16 }}>
             <SessionsCard user={user} />
-            <AppearanceCard />
           </div>
         </div>
       ) : (

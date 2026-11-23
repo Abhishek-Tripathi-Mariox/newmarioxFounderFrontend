@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DynamicForm } from '@/partners/components/forms/DynamicForm';
 import { useUser } from '@/partners/components/UserProvider';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 import { Button, Card, Chips, DataTable, Drawer, EmptyState, Modal, PageHeader, Pagination, SearchInput, SkeletonCards, StatusBadge, useToast } from '@/partners/components/ui';
 import { useList } from '@/partners/hooks/useList';
 import { useQueryFlag } from '@/partners/hooks/useQueryFlag';
@@ -21,6 +22,9 @@ export function RequestsView({ kind, admin, embedded, above, initialStatus }) {
   const cfg = REQUESTS[kind];
   const toast = useToast();
   const { user } = useUser();
+  const can = usePpCan();
+  const mayReview = can('pp_requests', 'e');
+  const mayDelete = can('pp_requests', 'd');
   // Admin tabs remount this per kind, so their filters stay out of the URL.
   const list = useList(`/requests/${kind}`, 'items', { sort: '-createdAt', limit: admin ? 25 : 10, urlState: !embedded, filters: initialStatus ? { status: initialStatus } : undefined });
   const { items, loading, reload } = list;
@@ -87,22 +91,33 @@ export function RequestsView({ kind, admin, embedded, above, initialStatus }) {
       <>
         {!embedded && <PageHeader eyebrow={cfg.eyebrow} title={cfg.title} subtitle={cfg.subtitle} />}
         {toolbar}
-        <Card subtitle="Click a row to approve, assign, reschedule or reply.">
+        <Card subtitle={mayReview ? 'Click a row to approve, assign, reschedule or reply.' : 'Click a row to see the request. Your role can view requests but not review them.'}>
           <DataTable rows={items} loading={loading} columns={columns} rowKey={r => r._id} empty={list.filtered ? 'No requests match your filters.' : cfg.empty} onRowClick={setReviewing} minWidth={820} sort={list.sort} onSort={list.setSort} footer={pager} />
         </Card>
         {reviewing && (
-          <Modal open title={`Review: ${String(reviewing.client || reviewing.subject || '')}`} subtitle={`From ${reviewing.owner?.name ?? 'partner'} · ${date(reviewing.createdAt)}`} onClose={() => setReviewing(null)} wide={kind === 'scope'}>
+          <Modal open title={`${mayReview ? 'Review' : 'Request'}: ${String(reviewing.client || reviewing.subject || '')}`} subtitle={`From ${reviewing.owner?.name ?? 'partner'} · ${date(reviewing.createdAt)}`} onClose={() => setReviewing(null)} wide={kind === 'scope'}>
             {kind === 'scope' && <div style={{ marginBottom: 20 }}><ScopeDetails s={reviewing} /></div>}
-            <DynamicForm
-              fields={[{ name: 'status', label: 'Status', type: 'select', options: REQUEST_STATUS[kind] }, ...cfg.reviewFields]}
-              initial={Object.fromEntries(['status', ...cfg.reviewFields.map(f => f.name)].map(k => [k, reviewing[k] ?? (k === 'approved' ? reviewing.submitted : '')]))}
-              submitLabel="Save review"
-              onSubmit={review}
-              onCancel={() => setReviewing(null)}
-            />
-            <div style={{ borderTop: '1px solid var(--line)', marginTop: 18, paddingTop: 14 }}>
-              <Button size="sm" variant="danger" icon="trash" onClick={remove}>Delete this request</Button>
-            </div>
+            {mayReview ? (
+              <DynamicForm
+                fields={[{ name: 'status', label: 'Status', type: 'select', options: REQUEST_STATUS[kind] }, ...cfg.reviewFields]}
+                initial={Object.fromEntries(['status', ...cfg.reviewFields.map(f => f.name)].map(k => [k, reviewing[k] ?? (k === 'approved' ? reviewing.submitted : '')]))}
+                submitLabel="Save review"
+                onSubmit={review}
+                onCancel={() => setReviewing(null)}
+              />
+            ) : (
+              // View only: the review as it stands (the role can't change requests).
+              <div className="stack" style={{ gap: 10 }}>
+                {[{ name: 'status', label: 'Status' }, ...cfg.reviewFields].map(f => (
+                  <div key={f.name}><div className="sub">{f.label}</div><div className="strong">{String(reviewing[f.name] ?? '') || '—'}</div></div>
+                ))}
+              </div>
+            )}
+            {mayDelete && (
+              <div style={{ borderTop: '1px solid var(--line)', marginTop: 18, paddingTop: 14 }}>
+                <Button size="sm" variant="danger" icon="trash" onClick={remove}>Delete this request</Button>
+              </div>
+            )}
           </Modal>
         )}
       </>

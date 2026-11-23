@@ -4,7 +4,7 @@ import { DAY, sod, fday, clock } from '@/lib/date';
 import { useStore } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { curMs } from '@/domain/projects';
-import { Modal, Button, IconButton, Field, Input, Select, Textarea, ErrorText } from '@/components/ui';
+import { Modal, Button, IconButton, Field, Input, Select, Textarea, ErrorText, Checkbox } from '@/components/ui';
 import { useEndShiftModel, hoursState, hx } from './useEndShiftModel';
 import s from './EndShiftModal.module.css';
 
@@ -82,8 +82,99 @@ function InternalWork({ rows, setRows }) {
   );
 }
 
-/** Live total (project + internal) vs. shift and time worked. */
-function HoursTotal({ projectH, internalH, m }) {
+/** Where a team task's hours go: its project's timesheet, else internal work (sales: always internal). */
+const taskHoursTo = (r, sales) => (r.p && !sales ? 'project' : 'internal');
+
+/**
+ * Team tasks (Team tasks page, not project tasks): tick the ones finished today — they become
+ * Done on submit — and optionally add hours and a note. Own open tasks are listed; "+ Add task"
+ * picks any other open task the person may complete.
+ */
+function TeamTasks({ rows, setRows, options, sales }) {
+  const setRow = (id, patch) => setRows(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const avail = options.filter((o) => !rows.some((r) => r.id === o.id));
+  const add = (id) => {
+    const o = options.find((x) => x.id === id);
+    if (o) setRows(rows.concat({ ...o, added: true }));
+  };
+  const open = rows.filter((r) => !r.doneToday).length;
+  return (
+    <div className={s.section}>
+      <SectionHead
+        title={`Team tasks${open ? ` · ${open} open` : ''}`}
+        sub={`Tick what you finished today — it’s marked Done in Team tasks. Hours go to the task’s project timesheet${sales ? '' : ' when it has one'}, otherwise to internal work.`}
+      />
+      {rows.length === 0 ? (
+        <div className={s.ttEmpty}>
+          No open team tasks assigned to you.{avail.length > 0 ? ' Worked on someone else’s? Add it below.' : ''}
+        </div>
+      ) : (
+        <>
+          <div className={`${s.ttGrid} ${s.hoursHead}`}><span>Done</span><span>Task</span><span>Hours</span><span>Note (optional)</span><span /></div>
+          {rows.map((r) => {
+            const to = taskHoursTo(r, sales);
+            return (
+              <div key={r.id} className={`${s.ttGrid} ${r.done ? s.ttDone : ''}`}>
+                <Checkbox
+                  checked={!!r.done}
+                  disabled={r.doneToday}
+                  title={r.doneToday ? 'Already marked Done today' : `Mark “${r.title}” as completed`}
+                  onChange={(v) => setRow(r.id, { done: v })}
+                />
+                <div className={s.ttTask}>
+                  <div className={s.ttTitle} title={r.title}>{r.title}</div>
+                  <div className={s.ttMeta}>
+                    {r.id} · {r.doneToday ? 'Done today' : r.status}
+                    {r.due ? ` · due ${r.due}` : ''}
+                    {!r.mine && r.aName ? ` · ${r.aName}` : ''}
+                    {' · '}<span className={to === 'project' ? s.ttToProject : s.ttToInternal}>hours → {to === 'project' ? `${r.pName || 'project'} timesheet` : 'internal work'}</span>
+                  </div>
+                </div>
+                <Input
+                  className={s.hoursInput}
+                  type="number" min="0" max="24" step="0.25" placeholder="0"
+                  value={r.h}
+                  aria-label={`Hours on ${r.title}`}
+                  onChange={(e) => setRow(r.id, { h: e.target.value })}
+                />
+                <Input value={r.note} placeholder="What you did" aria-label={`Note on ${r.title}`} onChange={(e) => setRow(r.id, { note: e.target.value })} />
+                {r.added
+                  ? <IconButton variant="plain" label="Remove task" onClick={() => setRows(rows.filter((x) => x.id !== r.id))} />
+                  : <span />}
+              </div>
+            );
+          })}
+        </>
+      )}
+      {avail.length > 0 && (
+        <div className={s.ttAdd}>
+          <Select
+            value=""
+            placeholder="+ Add task…"
+            aria-label="Add a team task"
+            options={avail.map((o) => ({ value: o.id, label: `${o.title}${!o.mine && o.aName ? ` · ${o.aName}` : ''}${o.pName ? ` · ${o.pName}` : ''}` }))}
+            onChange={(e) => add(e.target.value)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Team task hours split by where they go: {project, internal, total}. */
+function taskHours(rows, sales) {
+  const out = { project: 0, internal: 0, total: 0 };
+  (rows || []).forEach((r) => {
+    const h = +r.h || 0;
+    if (h <= 0) return;
+    out[taskHoursTo(r, sales)] += h;
+    out.total += h;
+  });
+  return out;
+}
+
+/** Live total (project + internal, team task hours included) vs. shift and time worked. */
+function HoursTotal({ projectH, internalH, teamH = 0, m }) {
   const total = projectH + internalH;
   const st = hoursState(total, m.shift, m.workedH);
   return (
@@ -91,7 +182,8 @@ function HoursTotal({ projectH, internalH, m }) {
       <div className={s.totalLine}>
         <span>
           <span className={s.totalH}>{hx(total)}</span> <span className={s.muted}>of {m.shift}h shift</span>
-          {internalH > 0 && <span className={s.muted}> · {hx(projectH)} projects + {hx(internalH)} internal</span>}
+          {(internalH > 0 || teamH > 0) && <span className={s.muted}> · {hx(projectH)} projects + {hx(internalH)} internal</span>}
+          {teamH > 0 && <span className={s.muted}> (incl. {hx(teamH)} team tasks)</span>}
         </span>
         <span className={s.state} style={{ color: st.color }}>{st.label}</span>
       </div>
@@ -201,11 +293,18 @@ export default function EndShiftModal({ onClose, ...initial }) {
     pmRows: initial.pmRows || [],
     internalRows: initial.internalRows || [],
     leadRows: sales ? (initial.leadRows || []) : [],
+    teamTaskRows: initial.teamTaskRows || [],
   }));
   const [err, setErr] = useState(initial.err || '');
   const [busy, setBusy] = useState(false);
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const bind = (k) => ({ value: form[k], onChange: (e) => set({ [k]: e.target.value }) });
+  const tth = taskHours(form.teamTaskRows, sales);
+  const internalSum = form.internalRows.reduce((x, r) => x + (+r.h || 0), 0);
+  const teamTasks = initial.teamTasksEnabled ? (
+    <TeamTasks rows={form.teamTaskRows} setRows={(teamTaskRows) => set({ teamTaskRows })} options={initial.teamTaskOptions || []} sales={sales} />
+  ) : null;
+  const ticked = form.teamTaskRows.filter((r) => r.done).length;
 
   const submit = async () => {
     if (busy) return;
@@ -245,9 +344,11 @@ export default function EndShiftModal({ onClose, ...initial }) {
           <>
             <DeliveryHours rows={form.rows} setRows={(rows) => set({ rows })} m={m} />
             <InternalWork rows={form.internalRows} setRows={(internalRows) => set({ internalRows })} />
+            {teamTasks}
             <HoursTotal
-              projectH={form.rows.reduce((x, r) => x + (+r.h || 0), 0)}
-              internalH={form.internalRows.reduce((x, r) => x + (+r.h || 0), 0)}
+              projectH={form.rows.reduce((x, r) => x + (+r.h || 0), 0) + tth.project}
+              internalH={internalSum + tth.internal}
+              teamH={tth.total}
               m={m}
             />
             {form.pmRows.length > 0 && (
@@ -255,7 +356,7 @@ export default function EndShiftModal({ onClose, ...initial }) {
             )}
             <div className={s.report}>
               <div className={s.sectionTitle}>Daily report</div>
-              <Field label="What did you complete today? *">
+              <Field label={ticked ? `What did you complete today? (optional — ${ticked} team task${ticked === 1 ? '' : 's'} ticked)` : 'What did you complete today? *'}>
                 <Textarea className={s.taLg} placeholder="Shipped, fixed, reviewed…" {...bind('done')} />
               </Field>
               <div className={s.twoCol}>
@@ -279,8 +380,9 @@ export default function EndShiftModal({ onClose, ...initial }) {
             <PendingFollowUps pid={pid} today={sod(now)} />
             <LeadsWorked rows={form.leadRows} setRows={(leadRows) => set({ leadRows })} pid={pid} today={sod(now)} />
             <InternalWork rows={form.internalRows} setRows={(internalRows) => set({ internalRows })} />
-            {form.internalRows.reduce((x, r) => x + (+r.h || 0), 0) > m.workedH + 0.01 && (
-              <div className={s.overMsg}>Internal work can’t be more than the time you worked today ({m.workedLabel}).</div>
+            {teamTasks}
+            {internalSum + tth.total > m.workedH + 0.01 && (
+              <div className={s.overMsg}>Internal work{tth.total > 0 ? ' and team task hours' : ''} can’t be more than the time you worked today ({m.workedLabel}).</div>
             )}
             <div className={s.report}>
               <div className={s.sectionTitle}>Daily report</div>

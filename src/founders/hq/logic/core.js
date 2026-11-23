@@ -1,6 +1,6 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import React from 'react';
-import { initialsOf } from '@/founders/auth/accounts';
+import { initialsOf, personColor } from '@/founders/auth/accounts';
 
 /** AI features (Founders AI chat, Write my brief, Ask the constitution, Claude drafts). Off for now. */
 export const AI_ON = false;
@@ -13,12 +13,43 @@ export const PORTAL_URLS = {
 
 /** Prefix of the per-browser view choices (task grouping, sort, layout …) kept in localStorage. */
 export const KEY = 'founders-hq-v1';
-/** The two seats plus "both". Names are filled from the accounts by applyAccountNames() before HQ renders. */
+/**
+ * HQ people, keyed by HQ person id: every Founder / Co-founder account (any number; filled from the
+ * accounts by applyAccountNames() before HQ renders) plus 'both' = "All founders" (the stored value
+ * stays 'both' so older data keeps working). The two original ids ('rahul', 'saswat') always have an
+ * entry so data that still names them renders even when nobody holds them any more.
+ */
 export const PEOPLE = {
   rahul: { name: 'Founder', first: 'Founder', role: 'Founder', ini: 'F', bg: 'oklch(0.55 0.17 265)' },
   saswat: { name: 'Co-founder', first: 'Co-founder', role: 'Co-founder', ini: 'C', bg: 'oklch(0.56 0.12 175)' },
-  both: { name: 'Founder & Co-founder', first: 'Both', ini: 'F+C', bg: 'oklch(0.45 0.03 265)' }
+  both: { name: 'All founders', first: 'All founders', ini: 'All', bg: 'oklch(0.45 0.03 265)' }
 };
+/** Label of the shared owner value 'both'. */
+export const ALL_FOUNDERS = 'All founders';
+/** Person ids of the current HQ members, founders first (the order GET /hq/users returns). */
+export const MEMBERS = ['rahul', 'saswat'];
+/** A person (or "All founders" for 'both' / unknown ids). */
+export const personOf = id => PEOPLE[id] || PEOPLE.both;
+/** Every member except `me`. */
+export const othersOf = me => MEMBERS.filter(id => id !== me);
+/** [id, first name, colour] for every member, optionally followed by 'both' (All founders). */
+export const memberOpts = (withAll = true) => [
+  ...MEMBERS.map(id => [id, PEOPLE[id].first, PEOPLE[id].bg]),
+  ...(withAll ? [['both', ALL_FOUNDERS, PEOPLE.both.bg]] : [])
+];
+/** True when every current member is in `ids` (sign-offs / approvals that need all founders). */
+export const allAgreed = ids => MEMBERS.length > 0 && MEMBERS.every(id => (ids || []).includes(id));
+/** Members still missing from `ids`. */
+export const missingFrom = ids => MEMBERS.filter(id => !(ids || []).includes(id));
+/** "Name (Founder), Name (Co-founder), …": who runs Founders HQ, for assistant prompts. */
+export const teamLine = () => MEMBERS.map(id => PEOPLE[id].name + ' (' + PEOPLE[id].role + ')').join(', ') || 'the founders';
+/** "A", "A and B", "A, B and C" from first names. */
+export const namesOf = ids => {
+  const names = ids.map(id => personOf(id).first);
+  return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+};
+/** The two original seats: their role names when nobody holds them any more. */
+const LEGACY_PEOPLE = { rahul: { role: 'Founder' }, saswat: { role: 'Co-founder' } };
 export const COS = [
   { id: 'mariox', name: 'Mariox', full: 'Mariox Software', ini: 'M', bg: 'oklch(0.6 0.17 265)', tint: 'oklch(0.95 0.03 265)', ink: 'oklch(0.42 0.15 265)', live: true, href: import.meta.env.VITE_INTERNAL_PORTAL_URL || '/' },
   { id: 'hroo', name: 'HROO', full: 'HROO', ini: 'H', bg: 'oklch(0.6 0.13 160)', tint: 'oklch(0.95 0.035 160)', ink: 'oklch(0.4 0.1 160)' },
@@ -67,23 +98,39 @@ export function syncCos(data) {
   CO_OPTS.splice(0, CO_OPTS.length, ...activeCompanies.map(company => [company.id, company.name]), ['all', 'Founders']);
 }
 export const CO_OPTS = [['mariox', 'Mariox'], ['hroo', 'HROO'], ['arth', 'Arth'], ['all', 'Founders']];
-export const OWNER_OPTS = [['rahul', 'Founder'], ['saswat', 'Co-founder'], ['both', 'Both']];
+/** [id, label] owner choices: every member, then 'both' (All founders). Rebuilt by applyAccountNames(). */
+export const OWNER_OPTS = [['rahul', 'Founder'], ['saswat', 'Co-founder'], ['both', ALL_FOUNDERS]];
 
 /**
- * Names the two seats after their accounts (`users` from GET /api/users): updates PEOPLE, the owner
- * options and the default sidebar subtitle in place, like syncCos does for companies. A seat without
- * an account keeps its role as its name ('Founder' / 'Co-founder').
+ * Builds HQ's people from the accounts (`users` from GET /hq/users: any number of founders and
+ * co-founders, each with a person id `seat` and a `role`): updates PEOPLE, MEMBERS, the owner options
+ * and the default sidebar subtitle in place, like syncCos does for companies.
  */
 export function applyAccountNames(users) {
-  ['rahul', 'saswat'].forEach(seat => {
-    const person = PEOPLE[seat];
-    const name = (users.find(user => user.seat === seat)?.name || '').trim() || person.role;
-    Object.assign(person, { name, first: name.split(/\s+/)[0], ini: initialsOf(name) });
-    OWNER_OPTS.find(([id]) => id === seat)[1] = person.first;
+  const list = (users || []).filter(user => user && user.seat);
+  // Former members keep their entry (old data names them), but are no longer members.
+  Object.keys(PEOPLE).forEach(id => { if (id !== 'both' && !LEGACY_PEOPLE[id] && !list.some(user => user.seat === id)) PEOPLE[id].former = true; });
+  ['rahul', 'saswat'].forEach(id => {
+    if (!list.some(user => user.seat === id)) Object.assign(PEOPLE[id], { name: LEGACY_PEOPLE[id].role, first: LEGACY_PEOPLE[id].role, ini: LEGACY_PEOPLE[id].role[0], former: true });
   });
-  const { rahul, saswat } = PEOPLE;
-  Object.assign(PEOPLE.both, { name: rahul.first + ' & ' + saswat.first, ini: rahul.ini[0] + '+' + saswat.ini[0] });
-  PF_DEF.sub = PEOPLE.both.name;
+  list.forEach(user => {
+    const role = user.seatLabel || (user.role === 'founder' ? 'Founder' : 'Co-founder');
+    const name = String(user.name || '').trim() || role;
+    PEOPLE[user.seat] = {
+      name, first: name.split(/\s+/)[0], role, ini: initialsOf(name) || role[0],
+      bg: personColor(user.seat),
+      hqRole: user.role || (user.seat === 'rahul' ? 'founder' : 'cofounder'), userId: user.userId || null, former: false
+    };
+  });
+  MEMBERS.splice(0, MEMBERS.length, ...list.map(user => user.seat));
+  OWNER_OPTS.splice(0, OWNER_OPTS.length, ...MEMBERS.map(id => [id, PEOPLE[id].first]), ['both', ALL_FOUNDERS]);
+  const firsts = MEMBERS.map(id => PEOPLE[id].first);
+  Object.assign(PEOPLE.both, {
+    name: MEMBERS.length === 2 ? firsts.join(' & ') : ALL_FOUNDERS,
+    first: ALL_FOUNDERS,
+    ini: MEMBERS.length === 2 ? MEMBERS.map(id => PEOPLE[id].ini[0]).join('+') : 'All'
+  });
+  PF_DEF.sub = !MEMBERS.length ? 'Founders' : MEMBERS.length <= 3 ? namesOf(MEMBERS).replace(' and ', ' & ') : MEMBERS.length + ' founders';
 }
 /** Builds segmented-control buttons from [value, label] pairs; the current value gets the raised white look. */
 export const segOf = (options, current, select) => options.map(([value, label]) => ({
@@ -111,7 +158,9 @@ export const SIDES = [
 export const SIZES = [['0.92', 'Small'], ['1', 'Normal'], ['1.08', 'Large'], ['1.16', 'Extra large']];
 export const PAGE_DEF = [
   ['home', 'Today'],
-  ['tasks', 'Tasks'],
+  ['tasks', 'Team tasks'],
+  ['mytasks', 'My tasks'],
+  ['users', 'Users & roles'],
   ['calendar', 'Calendar'],
   ['attendance', 'Attendance'],
   ['goals', 'Goals'],
@@ -145,15 +194,26 @@ export const DEPT_OF = Object.fromEntries(DEPTS.map(([id, label, hue]) => [id, {
   ink: 'oklch(0.4 0.11 ' + hue + ')',
   dot: 'oklch(0.62 0.13 ' + hue + ')',
 }]));
+/** My tasks table columns that can be shown or hidden (Settings → My tasks). */
+export const COL_DEF = [
+  ['status', 'Status'],
+  ['dept', 'Department'],
+  ['co', 'Company'],
+  ['team', 'Team'],
+  ['start', 'Start date'],
+  ['due', 'Due date'],
+  ['pri', 'Priority'],
+];
 export const PF_DEF = {
   acc: 'indigo',
   side: 'midnight',
   size: '1',
   name: 'Founders HQ',
-  sub: 'Founder & Co-founder',
+  sub: 'Founders',
   start: 'home',
   money: '',
   pages: [],
+  cols: { status: true, dept: true, co: true, team: true, start: true, due: true, pri: true },
 };
 export const PARTNER_DEF = { tickets: 0, approvals: 0, visits: 0, tech: 0, pay: 0, kyc: 0 };
 export const PARTNER_ROWS = [
@@ -450,7 +510,7 @@ export function goalCalc(goal, tasks) {
 export const WD = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 export const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 /**
- * Parses quick-add task text such as "Call bank @rahul #mariox !high fri".
+ * Parses quick-add task text such as "Call bank @rahul #mariox !high fri" (@<first name>, @<person id> or @all).
  * Each recognised token is removed from the title; only the first matching date form is used.
  */
 export function parseQuick(text) {
@@ -460,7 +520,14 @@ export function parseQuick(text) {
     const match = rest.match(pattern);
     if (match) { apply(match); rest = rest.replace(match[0], ' '); }
   };
-  take(/\s@(rahul|saswat|both)\b/i, match => owner = match[1].toLowerCase());
+  // @<first name>, @<person id>, @all or @both. Longest match first, so "@ann" does not take "@anna".
+  const handles = [['all', 'both'], ['both', 'both'], ...MEMBERS.flatMap(id => [[id, id], [PEOPLE[id].first.toLowerCase(), id]])]
+    .filter(([handle]) => /^[a-z0-9-]+$/.test(handle)).sort((a, b) => b[0].length - a[0].length);
+  if (handles.length) {
+    take(new RegExp('\\s@(' + handles.map(([handle]) => handle).join('|') + ')(?![a-z0-9-])', 'i'), match => {
+      owner = handles.find(([handle]) => handle === match[1].toLowerCase())[1];
+    });
+  }
   // #company: a built-in or founder-added company id (#founders = the Founders pseudo-company).
   const companyIds = ['mariox', 'hroo', 'arth', ...ALLCOS.map(company => company.id)];
   const companyTag = (rest.match(/\s#([a-z0-9-]+)(?=\s)/gi) || []).map(tag => tag.trim().slice(1).toLowerCase())
@@ -547,13 +614,23 @@ export const blocksToMd = blocks => (blocks || []).map(block =>
 
 /** Starter constitution: the 8 setup playbooks, no articles or rules yet (founders write their own). */
 export function seedConstitution() {
+  /**
+   * Template owners 'rahul' / 'saswat' mean "a founder" / "a co-founder": the first current member with
+   * that role (the original seat when it is still held), else all founders.
+   */
+  const seedOwner = owner => {
+    if (owner !== 'rahul' && owner !== 'saswat') return owner || 'both';
+    if (MEMBERS.includes(owner)) return owner;
+    const wanted = owner === 'rahul' ? 'founder' : 'cofounder';
+    return MEMBERS.find(id => PEOPLE[id].hqRole === wanted) || 'both';
+  };
   /** Playbook section; each step is a plain string or [text, owner, days, must, help]. */
   const section = (title, steps) => ({
     id: uid(),
     title,
     steps: steps.map(step => {
       const [text, owner, days, must, help] = Array.isArray(step) ? step : [step];
-      return { id: uid(), text, owner: owner || 'both', days: days || 0, must: must !== false, help: help || '' };
+      return { id: uid(), text, owner: seedOwner(owner), days: days || 0, must: must !== false, help: help || '' };
     }),
   });
   return {
@@ -694,7 +771,7 @@ export const XRULE_SEED = [
   ['phi', 'Write down our vision, mission and values', 'The founders record the group vision, mission, values and business philosophy here and review them every year.', 'R', 1, 'both', 'Draft'],
   ['gov', 'Level 1 · Independent authority', 'Routine operational decisions are made by the responsible founder or delegated manager within approved budgets and limits.'],
   ['gov', 'Level 2 · Joint approval', 'New company launches, major investments, borrowing, ownership changes, large commitments and strategic pivots need approval from both founders.'],
-  ['gov', 'Level 3 · Reserved matters', 'Matters requiring formal approval under shareholder agreements, board rules or applicable law. Neither founder should assume unilateral authority over these matters.'],
+  ['gov', 'Level 3 · Reserved matters', 'Matters requiring formal approval under shareholder agreements, board rules or applicable law. No founder should assume unilateral authority over these matters.'],
   ['gov', 'Every area has a designated owner', 'Company operations have a designated company owner, product strategy a designated product owner and hiring a designated hiring owner, so small decisions do not wait for both founders.', 'M', 2],
   ['cre', 'No major commitment without an approved proposal', 'No new company should receive significant capital or incur major commitments without a documented business proposal and the required founder approvals.'],
   ['cre', 'Every new company passes the 7-stage process', 'Opportunity identification, market research, business feasibility, founders\' approval, business setup, launch plan and review. No stage is skipped.', 'M', 2],
@@ -741,11 +818,11 @@ export const XRULE_SEED = [
   ['leg', 'This is an internal framework', 'This constitution is an internal governance framework. It does not replace articles of association, shareholder agreements, board resolutions or statutory policies; those are aligned with professional legal advice.'],
   ['rsk', 'A contingency plan for every company', 'Each company keeps a short plan for its top risks, such as losing a key customer, a key person or cash.', 'R', 2, 'both', 'Draft'],
   ['con', 'Disagreements are written down', 'When founders disagree on a Level 2 matter, each writes their position and the options in Decisions. If there is no agreement within 7 days, the matter waits until both agree or a mutually chosen advisor is consulted.', 'R', 1, 'both', 'Draft'],
-  ['amd', 'No one silently overwrites a rule', 'A founder proposes a change, the reason is recorded, the other founder reviews it, approval is obtained, the new version becomes effective and the previous version stays in history.'],
+  ['amd', 'No one silently overwrites a rule', 'A founder proposes a change, the reason is recorded, the other founders review it, approval is obtained, the new version becomes effective and the previous version stays in history.'],
   ['amd', 'Exceptions are documented and expire', 'Temporary deviations from a rule are documented, approved by both founders and given an expiry date in the exception register.']
 ];
-export const XAUTH_DEF = { limit: 500000, emergency: 'In an emergency that threatens cash, people, customers or legal standing, either founder may act at once to protect the business, then records the action in Decisions within 24 hours for the other founder to review.', absence: 'If a founder cannot be reached for more than 3 working days, the other founder may take Level 1 decisions in their area. Level 2 matters wait unless emergency authority applies.',
-  matrix: [['Overall group vision', 'Rahul + Saswat', 2], ['New company proposals', 'Both founders', 2], ['Strategic investments', 'Both founders', 2], ['Company operations', 'Designated company owner', 1], ['Product strategy', 'Designated product owner', 1], ['Hiring leadership', 'Designated hiring owner', 1], ['Finance planning', 'Finance owner + founder oversight', 1], ['Major business decisions', 'Both founders where reserved', 2]].map(([area, who, lvl], position) => ({ id: 'm' + position, area, who, lvl })) };
+export const XAUTH_DEF = { limit: 500000, emergency: 'In an emergency that threatens cash, people, customers or legal standing, any founder may act at once to protect the business, then records the action in Decisions within 24 hours for the other founders to review.', absence: 'If a founder cannot be reached for more than 3 working days, the other founders may take Level 1 decisions in their area. Level 2 matters wait unless emergency authority applies.',
+  matrix: [['Overall group vision', 'All founders', 2], ['New company proposals', 'All founders', 2], ['Strategic investments', 'All founders', 2], ['Company operations', 'Designated company owner', 1], ['Product strategy', 'Designated product owner', 1], ['Hiring leadership', 'Designated hiring owner', 1], ['Finance planning', 'Finance owner + founder oversight', 1], ['Major business decisions', 'All founders where reserved', 2]].map(([area, who, lvl], position) => ({ id: 'm' + position, area, who, lvl })) };
 export const XMATTERS = [
   ['ops', 'Routine operational spend or decision', 1],
   ['hire', 'Hiring within approved manpower budget', 1],
@@ -762,7 +839,7 @@ export const XCST = [
   ['Opportunity', 'What problem are we solving? Who needs this business? Why now?'],
   ['Market research', 'Market size, customer demand, competitors, pricing and business opportunity.'],
   ['Feasibility', 'Revenue model, expected costs, investment requirement, profitability and risks.'],
-  ['Founders\' approval', 'Rahul and Saswat review the proposal, discuss responsibilities and approve or reject it.'],
+  ['Founders\' approval', 'The founders review the proposal, discuss responsibilities and approve or reject it.'],
   ['Business setup', 'Name, ownership, legal structure, registration, banking, domain, brand and initial team.'],
   ['Launch plan', '90-day roadmap, budget, team, customers and measurable milestones.'],
   ['Review', 'Review performance at 30, 60 and 90 days. Decide whether to continue, pivot, invest more or stop.'],
@@ -917,8 +994,8 @@ export function load(saved) { return ensureCos(load0(saved)); }
 /** Back-fills fields added since `saved` was written; falls back to empty starting data when it is missing or unusable. */
 export function load0(saved) {
   try {
-    // `tasks` (the founders' own tasks of the old HQ) stays in the saved data untouched but is no longer
-    // shown or used: team tasks are HQ's tasks now. It still marks a usable saved workspace.
+    // `tasks` are the founders' own tasks (My tasks); HQ's Team tasks come from the internal portal.
+    // It also marks a usable saved workspace.
     if (saved && saved.tasks) {
       saved.pages = (saved.pages || []).map(page => page.blocks
         ? page

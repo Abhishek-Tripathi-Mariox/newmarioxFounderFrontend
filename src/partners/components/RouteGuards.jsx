@@ -90,15 +90,15 @@ export function LoginRedirect() {
 
 /**
  * /partners/forgot-password (old links): forgot password is the one Mariox One flow at
- * /forgot-password, opened on the Partner box. `?email=` / `?next=` are passed on.
+ * /forgot-password. `?email=` / `?next=` are passed on.
  */
 export function ForgotRedirect() {
   const { search } = useLocation();
   useEffect(() => {
     const params = new URLSearchParams(search);
-    const out = new URLSearchParams({ as: 'partner' });
+    const out = new URLSearchParams();
     ['email', 'next'].forEach((k) => params.get(k) && out.set(k, params.get(k)));
-    leaveTo(`/forgot-password?${out}`, { replace: true });
+    leaveTo(`/forgot-password${out.size ? `?${out}` : ''}`, { replace: true });
   }, [search]);
   return null;
 }

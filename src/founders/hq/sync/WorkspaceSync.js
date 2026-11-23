@@ -11,7 +11,7 @@ const isRetryable = (error) => error.status === 0 || error.status === 429 || err
  * Keeps HQ's shared workspace in step with the server copy (optimistic concurrency, see API.md):
  *
  * - queue(data) saves the newest data after a short pause, so a burst of edits is one PUT;
- * - a 409 means the other founder saved first: their copy wins and is handed to onConflict;
+ * - a 409 means another founder saved first: their copy wins and is handed to onConflict;
  * - while there are no unsaved edits, the server is polled (tab visible only) and newer copies
  *   are handed to onRemoteChange.
  */

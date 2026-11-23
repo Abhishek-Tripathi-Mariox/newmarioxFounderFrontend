@@ -6,14 +6,16 @@ import { SEG } from '../shared/attendanceUtils';
 import { ATT_HOURS } from '../useAttendanceModel';
 import DayBar from './DayBar';
 import InternalWorkList from '../shared/InternalWorkList';
+import TeamTaskReportList from '../shared/TeamTaskReportList';
 import { hh } from '@/lib/format';
 import s from './AttendanceDayTable.module.css';
 
 /** Expanded row content: event chips + end-of-shift report. */
-function RowDetails({ r }) {
+function RowDetails({ r, controls }) {
   return (
     <tr>
       <td colSpan={8} className={s.detailCell}>
+        {controls && <div className={s.controls}>{controls}</div>}
         <div className={s.events}>
           {r.events.map((e) => (
             <span key={e.key} className={s.event}>
@@ -23,13 +25,14 @@ function RowDetails({ r }) {
             </span>
           ))}
         </div>
-        {(r.rep.length > 0 || r.internal.length > 0) && (
+        {(r.rep.length > 0 || r.internal.length > 0 || r.teamTasks.length > 0) && (
           <div className={s.report}>
             <div className={s.reportTitle}>End-of-shift report</div>
             {r.rep.map((q) => (
               <div key={q.k + q.v} className={s.reportLine}><span className={s.reportKey}>{q.k}</span><span className={s.reportVal}>{q.v}</span></div>
             ))}
             {r.internal.length > 0 && <div className={s.internal}><InternalWorkList items={r.internal} /></div>}
+            {r.teamTasks.length > 0 && <div className={s.internal}><TeamTaskReportList items={r.teamTasks} /></div>}
           </div>
         )}
       </td>
@@ -38,7 +41,8 @@ function RowDetails({ r }) {
 }
 
 /** Day / person attendance table with timeline bars and expandable rows. */
-export default function AttendanceDayTable({ firstCol, rows, empty, onToggle }) {
+/** `controlsFor(row)`: check-in / break / timer controls shown in an expanded row (today, att Edit), or null. */
+export default function AttendanceDayTable({ firstCol, rows, empty, onToggle, controlsFor }) {
   // Page by person/day; expanding a row doesn't change the row count, so the page is kept.
   const pager = usePagination(rows, { pageSize: 25, resetKey: firstCol });
   return (
@@ -77,7 +81,7 @@ export default function AttendanceDayTable({ firstCol, rows, empty, onToggle }) 
                 <td className={s.barCell}><DayBar segs={r.segs} /></td>
                 <td className={s.chev}>{r.open ? '▴' : '▾'}</td>
               </tr>
-              {r.open && <RowDetails r={r} />}
+              {r.open && <RowDetails r={r} controls={controlsFor ? controlsFor(r) : null} />}
             </Fragment>
           ))}
         </tbody>

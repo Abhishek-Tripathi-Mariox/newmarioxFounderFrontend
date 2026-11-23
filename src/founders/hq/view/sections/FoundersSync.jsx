@@ -42,7 +42,7 @@ export default function FoundersSync({ vm }) {
             {'Founders\' sync'}
           </h1>
           <div style={{ fontSize: '13.5px', color: 'oklch(0.52 0.012 265)', marginTop: '4px' }}>
-            {'A 50-minute weekly meeting for both founders. Everything you agree lands in Tasks and Decisions.'}
+            {'A 50-minute weekly meeting for all founders. Everything you agree lands in Tasks and Decisions.'}
           </div>
         </div>
         <button onClick={vm.sy?.start} style={{

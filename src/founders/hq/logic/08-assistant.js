@@ -6,7 +6,7 @@ import { PEOPLE, coOf, AI_ON } from './core';
 
 /** Human-readable page names, keyed by view id. */
 const PAGE_NAMES = {
-  home: 'Today', tasks: 'Tasks', calendar: 'Calendar', attendance: 'Attendance', goals: 'Goals', decisions: 'Decisions',
+  home: 'Today', tasks: 'Team tasks', mytasks: 'My tasks', calendar: 'Calendar', attendance: 'Attendance', goals: 'Goals', decisions: 'Decisions',
   sync: 'Founders\' sync', scorecard: 'Scorecard', review: 'Weekly review', pipeline: 'Sales pipeline', customers: 'Customers',
   contracts: 'Contracts', research: 'Research', finance: 'Finance', hiring: 'Hiring', docs: 'Docs & files', vault: 'Vault',
   companies: 'Companies', constitution: 'Constitution', settings: 'Settings', co: 'Company',
@@ -42,9 +42,9 @@ const EXTRA_PROMPTS = {
   hiring: ['Write a job description for our most urgent role as a doc'],
   docs: ['Write an employee onboarding SOP as a doc', 'Write a 1-page investor update as a doc'],
   companies: ['Write a 90-day launch plan for a new company as a doc'],
-  tasks: ['Which tasks can be marked done or deleted?', 'Rebalance work between Rahul and Saswat'],
+  tasks: ['Which tasks can be marked done or deleted?', 'Rebalance work between the founders'],
   pipeline: ['Write a cold email for our ideal customer'],
-  home: ['Draft a WhatsApp update to Saswat about today'],
+  home: ['Draft a WhatsApp update to the other founders about today'],
 };
 
 /** Per action type: [tag label, tag background, tag text colour, button label]. */
@@ -235,7 +235,7 @@ export default class HQAssistant extends HQSales {
       open: () => { this.setState({ aiOpen: true }); this._focus = { sel: '[data-ai7]' }; },
       close: () => this.setState({ aiOpen: false }),
       page: PAGE_NAMES[view] || 'this page',
-      me: (PEOPLE[me] || PEOPLE.rahul).first,
+      me: (PEOPLE[me] || PEOPLE.both).first,
       msgs,
       hasMsgs: !!chat.length,
       empty: !chat.length && !state.aiBusy,

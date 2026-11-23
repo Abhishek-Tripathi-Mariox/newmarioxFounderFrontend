@@ -12,6 +12,7 @@ import { Button, Dropdown, Icon, Modal, SkeletonCards, useToast } from '@/partne
 import { useApi } from '@/partners/hooks/useApi';
 import { api } from '@/partners/api';
 import { DEFAULT_QUERY, HOME, RANGES, TEMP, add, flag, inView, overdue, rel, t12, today,  } from '@/partners/lib/acquisition';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 
 const URL_ = '/admin/acquisition';
 const UI_KEY = 'mariox.acq.ui4';
@@ -21,6 +22,11 @@ const UI_KEY = 'mariox.acq.ui4';
 // converting a lead creates the partner account, and onboarding continues in Partners.
 export default function AcquisitionPage() {
   const toast = useToast();
+  const ppCan = usePpCan();
+  const can = (act) => ppCan('pp_acq', act);
+  const mayEdit = can('e');
+  // View only: the board opens leads, but moving / updating them explains why it can't.
+  const viewOnly = () => toast('Your role can view acquisition but not change leads', true);
   const { data, setData, reload } = useApi(URL_);
   const [Q, setQ] = useState(DEFAULT_QUERY);
   const [now, setNow] = useState(() => Date.now());
@@ -115,7 +121,7 @@ export default function AcquisitionPage() {
         </div>
         <div className="rq-tools">
           <button type="button" className="tbtn" aria-label="Settings" title="Settings, import and export" onClick={() => setDialog('settings')}><Icon name="sliders" /></button>
-          <Button variant="ink" icon="plus" onClick={() => setForm({ lead: null, back: false })}>Add lead</Button>
+          {can('c') && <Button variant="ink" icon="plus" onClick={() => setForm({ lead: null, back: false })}>Add lead</Button>}
         </div>
       </div>
 
@@ -160,8 +166,8 @@ export default function AcquisitionPage() {
         range={Q.range}
         now={now}
         onOpen={l => setOpenId(l._id)}
-        onUpdate={(l, pre) => setUpdate({ lead: l, pre, back: false })}
-        onOnboard={onboard}
+        onUpdate={mayEdit ? (l, pre) => setUpdate({ lead: l, pre, back: false }) : viewOnly}
+        onOnboard={mayEdit ? onboard : viewOnly}
         onRefuse={msg => toast(msg, true)}
       />
       </div>
@@ -169,9 +175,9 @@ export default function AcquisitionPage() {
         leads={leads}
         Q={Q}
         onOpen={l => setOpenId(l._id)}
-        onUpdate={l => setUpdate({ lead: l, back: false })}
-        onEdit={l => setForm({ lead: l, back: false })}
-        onInvite={l => setInviteId(l._id)}
+        onUpdate={mayEdit ? l => setUpdate({ lead: l, back: false }) : viewOnly}
+        onEdit={mayEdit ? l => setForm({ lead: l, back: false }) : viewOnly}
+        onInvite={mayEdit ? l => setInviteId(l._id) : viewOnly}
       />
       </div>
 
@@ -181,14 +187,15 @@ export default function AcquisitionPage() {
           now={now}
           rate={data.rate}
           onClose={() => setOpenId(null)}
-          onUpdate={() => setUpdate({ lead: open, back: true })}
-          onEdit={() => setForm({ lead: open, back: true })}
-          onReopen={() => patch(open, { action: 'reopen', today: today() }, `Reopened · ${open.name}`)}
-          onOnboard={() => onboard(open)}
-          onInvite={() => setInviteId(open._id)}
-          onDelete={() => setDialog('delete')}
-          onTemp={t => patch(open, { action: 'temp', temp: t }, `${open.name}: ${TEMP[t][0]}`)}
-          onNotes={notes => patch(open, { action: 'notes', notes })}
+          readOnly={!mayEdit}
+          onUpdate={mayEdit ? () => setUpdate({ lead: open, back: true }) : undefined}
+          onEdit={mayEdit ? () => setForm({ lead: open, back: true }) : undefined}
+          onReopen={mayEdit ? () => patch(open, { action: 'reopen', today: today() }, `Reopened · ${open.name}`) : undefined}
+          onOnboard={mayEdit ? () => onboard(open) : undefined}
+          onInvite={mayEdit ? () => setInviteId(open._id) : undefined}
+          onDelete={can('d') ? () => setDialog('delete') : undefined}
+          onTemp={mayEdit ? t => patch(open, { action: 'temp', temp: t }, `${open.name}: ${TEMP[t][0]}`) : viewOnly}
+          onNotes={mayEdit ? notes => patch(open, { action: 'notes', notes }) : () => {}}
           onToast={m => toast(m)}
         />
       )}
@@ -221,6 +228,7 @@ export default function AcquisitionPage() {
           onListsSaved={next => setData({ ...data, lists: next })}
           onEmailsSaved={next => setData({ ...data, emails: next })}
           onImport={() => setDialog('import')}
+          can={can}
           onChanged={msg => { setDialog(null); reload(); if (msg) toast(msg); }}
         />
       )}

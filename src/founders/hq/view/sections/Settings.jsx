@@ -207,7 +207,7 @@ export default function Settings({ vm }) {
                 outline: 'none',
                 background: '#fff',
               }} />
-            <input value={inputValue(vm.sx?.sub)} onChange={vm.sx?.onSub} placeholder="Subtitle, e.g. both founders' names" style={{
+            <input value={inputValue(vm.sx?.sub)} onChange={vm.sx?.onSub} placeholder="Subtitle, e.g. the founders' names" style={{
                 height: '36px',
                 width: '100%',
                 maxWidth: '320px',
@@ -336,6 +336,172 @@ export default function Settings({ vm }) {
               </option>
             </Fragment>))}
           </select>
+        </div>
+      </div>
+    </div>
+    {' '}
+    <div style={{
+        background: '#fff',
+        border: '1px solid oklch(0.915 0.006 85)',
+        borderRadius: '12px',
+        overflow: 'hidden',
+      }}>
+      <div style={{ padding: '14px 20px', fontSize: '15px', fontWeight: '600' }}>
+        {'My tasks'}
+      </div>
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))',
+          gap: '10px 24px',
+          padding: '16px 20px',
+          borderTop: '1px solid oklch(0.94 0.005 85)',
+          alignItems: 'start',
+        }}>
+        <div style={{ maxWidth: '300px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600' }}>
+            {'Default view'}
+          </div>
+          <div style={{
+              fontSize: '12.5px',
+              color: 'oklch(0.52 0.012 265)',
+              marginTop: '3px',
+              lineHeight: '1.45',
+              textWrap: 'pretty',
+            }}>
+            {'How the My tasks page opens.'}
+          </div>
+        </div>
+        <div style={{ minWidth: '0' }}>
+          <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '2px',
+              padding: '3px',
+              background: 'oklch(0.94 0.005 85)',
+              borderRadius: '9px',
+              width: 'fit-content',
+            }}>
+            {asList(vm.sx?.viewSeg).map((segment, index) => (<Fragment key={index}>
+              <button onClick={segment?.go} style={inlineStyle(`border:0;padding:6px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;background:${attr(segment?.bg)};color:${attr(segment?.fg)};box-shadow:${attr(segment?.sh)}`)}>
+                {show(segment?.label)}
+              </button>
+            </Fragment>))}
+          </div>
+        </div>
+      </div>
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))',
+          gap: '10px 24px',
+          padding: '16px 20px',
+          borderTop: '1px solid oklch(0.94 0.005 85)',
+          alignItems: 'start',
+        }}>
+        <div style={{ maxWidth: '300px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600' }}>
+            {'Group by'}
+          </div>
+          <div style={{
+              fontSize: '12.5px',
+              color: 'oklch(0.52 0.012 265)',
+              marginTop: '3px',
+              lineHeight: '1.45',
+              textWrap: 'pretty',
+            }}>
+            {'Sections in the task list.'}
+          </div>
+        </div>
+        <div style={{ minWidth: '0' }}>
+          <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '2px',
+              padding: '3px',
+              background: 'oklch(0.94 0.005 85)',
+              borderRadius: '9px',
+              width: 'fit-content',
+            }}>
+            {asList(vm.sx?.groupSeg).map((segment, index) => (<Fragment key={index}>
+              <button onClick={segment?.go} style={inlineStyle(`border:0;padding:6px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;background:${attr(segment?.bg)};color:${attr(segment?.fg)};box-shadow:${attr(segment?.sh)}`)}>
+                {show(segment?.label)}
+              </button>
+            </Fragment>))}
+          </div>
+        </div>
+      </div>
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))',
+          gap: '10px 24px',
+          padding: '16px 20px',
+          borderTop: '1px solid oklch(0.94 0.005 85)',
+          alignItems: 'start',
+        }}>
+        <div style={{ maxWidth: '300px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600' }}>
+            {'Sort by'}
+          </div>
+          <div style={{
+              fontSize: '12.5px',
+              color: 'oklch(0.52 0.012 265)',
+              marginTop: '3px',
+              lineHeight: '1.45',
+              textWrap: 'pretty',
+            }}>
+            {'Order inside each section.'}
+          </div>
+        </div>
+        <div style={{ minWidth: '0' }}>
+          <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '2px',
+              padding: '3px',
+              background: 'oklch(0.94 0.005 85)',
+              borderRadius: '9px',
+              width: 'fit-content',
+            }}>
+            {asList(vm.sx?.sortSeg).map((segment, index) => (<Fragment key={index}>
+              <button onClick={segment?.go} style={inlineStyle(`border:0;padding:6px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;background:${attr(segment?.bg)};color:${attr(segment?.fg)};box-shadow:${attr(segment?.sh)}`)}>
+                {show(segment?.label)}
+              </button>
+            </Fragment>))}
+          </div>
+        </div>
+      </div>
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))',
+          gap: '10px 24px',
+          padding: '16px 20px',
+          borderTop: '1px solid oklch(0.94 0.005 85)',
+          alignItems: 'start',
+        }}>
+        <div style={{ maxWidth: '300px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600' }}>
+            {'Columns in list view'}
+          </div>
+          <div style={{
+              fontSize: '12.5px',
+              color: 'oklch(0.52 0.012 265)',
+              marginTop: '3px',
+              lineHeight: '1.45',
+              textWrap: 'pretty',
+            }}>
+            {'Turn off columns you don’t use to keep the list clean.'}
+          </div>
+        </div>
+        <div style={{ minWidth: '0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {asList(vm.sx?.cols).map((column, index) => (<Fragment key={index}>
+              <button onClick={column?.go} style={inlineStyle(`height:34px;border:1px solid ${attr(column?.bd)};background:${attr(column?.bg)};color:${attr(column?.fg)};border-radius:17px;padding:0 14px 0 11px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px`)}>
+                <span style={{ fontSize: '12px' }}>
+                  {show(column?.mark)}
+                </span>
+                {show(column?.label)}
+              </button>
+            </Fragment>))}
+          </div>
         </div>
       </div>
     </div>

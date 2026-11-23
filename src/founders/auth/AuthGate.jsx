@@ -4,7 +4,7 @@ import { fetchCurrentUser } from '@/founders/api/auth';
 import { signOut } from '@/lib/sso';
 import styles from './auth.module.css';
 
-/** Full-width card on the sign-in layout: no HQ seat, or the server could not be reached. */
+/** Full-width card on the sign-in layout: no HQ access, or the server could not be reached. */
 function GateMessage({ title, text, children }) {
   return (
     <AuthLayout>
@@ -23,7 +23,7 @@ function GateMessage({ title, text, children }) {
  * Founders HQ for the signed-in Mariox account: `children(account, signOut)`.
  * There is no HQ sign-in of its own (docs/SSO.md): the session is the shared Mariox cookie, so on
  * load we ask the server who is signed in. No session (401) → /login?next=<here> (the API client
- * redirects); signed in without a Founders HQ seat (403) → a "no access" screen.
+ * redirects); signed in without Founders HQ access (403) → a "no access" screen.
  */
 export default function AuthGate({ children }) {
   const [state, setState] = useState({ status: 'checking' });
@@ -45,7 +45,7 @@ export default function AuthGate({ children }) {
   if (state.status === 'in') return children(state.account, signOut);
   if (state.status === 'denied') {
     return (
-      <GateMessage title="No access to Founders HQ" text="Founders HQ is open to the Founder and Co-founder seats. Your Mariox account doesn’t hold one.">
+      <GateMessage title="No access to Founders HQ" text="Founders HQ is open to founders and co-founders. Your Mariox account doesn’t have Founders HQ access — a Super Admin can give it in Users &amp; roles.">
         <a className={styles.submit} href="/">
           Back to Mariox
         </a>

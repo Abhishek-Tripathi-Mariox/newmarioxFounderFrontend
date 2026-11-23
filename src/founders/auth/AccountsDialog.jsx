@@ -1,37 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import PasswordInput from './PasswordInput';
-import { freeSeats, initialsOf, seatLabel, validateAccount, validatePassword } from './accounts';
+import { ROLES, accountRoleLabel, initialsOf, personColor, roleLabel, validateAccount, validatePassword } from './accounts';
 import { changeOwnPassword } from '@/founders/api/auth';
 import { createUser, listUsers, removeUser, setUserPassword, updateUser } from '@/founders/api/users';
 import { LOGIN_PATH } from '@/lib/sso';
 import styles from './AccountsDialog.module.css';
 
-const SEAT_COLORS = { rahul: 'oklch(0.55 0.17 265)', saswat: 'oklch(0.56 0.12 175)' };
 const EMPTY_FORM = { name: '', email: '', password: '' };
 const NO_PASSWORD_FORM = { id: null, current: '', next: '' };
 
 /**
- * Who holds a Founders HQ seat (docs/SSO.md). Every seat belongs to a Mariox account — the one
- * people sign in with everywhere:
- *  - add: creates a new Mariox account (Super Admin, title Founder / Co-founder) holding the free
- *    seat, with the password set here (an existing team member gets a seat from the internal
- *    portal: Users & roles → edit user → Founders HQ access);
- *  - edit details / change password: the Mariox account's name, email and password;
- *  - remove: takes the seat (HQ access) away; the Mariox account itself stays.
+ * The Founders HQ members (docs/SSO.md): any number of Founders and Co-founders. Every member is a
+ * Mariox account — the one people sign in with everywhere:
+ *  - add founder / add co-founder: creates a new Mariox account (Super Admin, title Founder /
+ *    Co-founder) with HQ access, with the password set here (an existing team member gets access
+ *    from the internal portal: Users & roles → edit user → Founders HQ access);
+ *  - edit: the Mariox account's name and email, and their HQ role;
+ *  - change password: the Mariox account's password;
+ *  - remove: takes HQ access away; the Mariox account itself stays.
  * Your own password change asks for the current one (and signs out your other sessions); you
- * cannot remove your own seat.
+ * cannot remove yourself.
  */
 export default function AccountsDialog({ currentAccountId, onClose, onAccountsChanged }) {
   const [accounts, setAccounts] = useState(null); // null while loading
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(null); // null, or the role being added: 'founder' | 'cofounder'
   const [form, setForm] = useState(EMPTY_FORM);
   const [passwordForm, setPasswordForm] = useState(NO_PASSWORD_FORM);
-  const [editing, setEditing] = useState(null); // { id, name, email }
+  const [editing, setEditing] = useState(null); // { id, name, email, role }
   const [message, setMessage] = useState({ text: '', tone: 'info' });
   const [busy, setBusy] = useState(false);
   const dialogRef = useRef(null);
 
-  const seats = freeSeats(accounts || []);
+  const counts = ROLES.map((role) => [role, (accounts || []).filter((account) => account.role === role.id).length]);
 
   const reload = useCallback(async () => {
     const next = await listUsers();
@@ -71,12 +71,12 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
     const problem = validateAccount(form, accounts);
     if (problem) return setMessage({ text: problem, tone: 'bad' });
     const added = await run(
-      () => createUser({ ...form, seat: seats[0].id }),
+      () => createUser({ ...form, role: adding }),
       `${form.name.trim()} can now sign in at ${window.location.origin}${LOGIN_PATH} with ${form.email.trim()}.`,
     );
     if (added) {
       setForm(EMPTY_FORM);
-      setAdding(false);
+      setAdding(null);
     }
   }
 
@@ -99,7 +99,7 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
   }
 
   async function handleRemove(account) {
-    const question = `Remove ${account.name}’s Founders HQ access? Their ${seatLabel(account.seat).toLowerCase()} seat is freed. Their Mariox account stays: they can still sign in to the other Mariox apps.`;
+    const question = `Remove ${account.name}’s Founders HQ access (${accountRoleLabel(account).toLowerCase()})? Their Mariox account stays: they can still sign in to the other Mariox apps. Their HQ tasks and sign-offs stay too, and come back if you give them access again.`;
     if (!window.confirm(question)) return;
     await run(() => removeUser(account.id), `${account.name} no longer has access to Founders HQ.`);
   }
@@ -114,7 +114,11 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
             <h2 id="accounts-title" className={styles.title}>
               Accounts
             </h2>
-            <p className={styles.subtitle}>Mariox accounts with a Founders HQ seat.</p>
+            <p className={styles.subtitle}>
+              {accounts
+                ? counts.map(([role, count]) => `${count} ${count === 1 ? role.label.toLowerCase() : role.label.toLowerCase() + 's'}`).join(' · ')
+                : 'Founders and co-founders with access to Founders HQ.'}
+            </p>
           </div>
           <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
             ×
@@ -133,7 +137,7 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
           {(accounts || []).map((account) => (
             <li key={account.id} className={styles.row}>
               <div className={styles.person}>
-                <span className={styles.avatar} style={{ background: SEAT_COLORS[account.seat] }} aria-hidden="true">
+                <span className={styles.avatar} style={{ background: personColor(account.seat) }} aria-hidden="true">
                   {initialsOf(account.name)}
                 </span>
                 <div className={styles.personText}>
@@ -142,14 +146,14 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
                     {account.id === currentAccountId && <span className={styles.you}>You</span>}
                   </span>
                   <span className={styles.meta}>
-                    {account.email} · {seatLabel(account.seat)}
+                    {account.email} · {accountRoleLabel(account)}
                   </span>
                 </div>
                 <div className={styles.actions}>
                   <button
                     type="button"
                     className={styles.secondary}
-                    onClick={() => setEditing(editing?.id === account.id ? null : { id: account.id, name: account.name, email: account.email })}
+                    onClick={() => setEditing(editing?.id === account.id ? null : { id: account.id, name: account.name, email: account.email, role: account.role || 'cofounder' })}
                   >
                     Edit
                   </button>
@@ -173,6 +177,16 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
                     <label className={styles.label}>
                       Email
                       <input className={styles.input} type="email" value={editing.email} onChange={(event) => setEditing({ ...editing, email: event.target.value })} />
+                    </label>
+                    <label className={styles.label}>
+                      Role in Founders HQ
+                      <select className={styles.input} value={editing.role} onChange={(event) => setEditing({ ...editing, role: event.target.value })}>
+                        {ROLES.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                   <div className={styles.formActions}>
@@ -224,10 +238,9 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
           ))}
         </ul>
 
-        {seats.length > 0 &&
-          (adding ? (
+        {adding ? (
             <form className={styles.addForm} onSubmit={handleAdd} noValidate>
-              <h3 className={styles.formTitle}>Add {seatLabel(seats[0].id).toLowerCase()}</h3>
+              <h3 className={styles.formTitle}>Add {roleLabel(adding).toLowerCase()}</h3>
               <div className={styles.grid}>
                 <label className={styles.label}>
                   Name
@@ -255,10 +268,10 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
                 placeholder="At least 8 characters. Share it with them privately."
               />
               <p className={styles.meta}>
-                Creates a new Mariox account (Super Admin) with this seat. Already on the team? Give them the seat from the internal portal instead: Users &amp; roles → edit user → Founders HQ access.
+                Creates a new Mariox account (Super Admin) with Founders HQ access as {roleLabel(adding).toLowerCase()}. Already on the team? Give them access from Users &amp; roles instead: edit user → Founders HQ access.
               </p>
               <div className={styles.formActions}>
-                <button type="button" className={styles.secondary} onClick={() => setAdding(false)}>
+                <button type="button" className={styles.secondary} onClick={() => setAdding(null)}>
                   Cancel
                 </button>
                 <button type="submit" className={styles.primary} disabled={busy}>
@@ -267,13 +280,17 @@ export default function AccountsDialog({ currentAccountId, onClose, onAccountsCh
               </div>
             </form>
           ) : (
-            <button type="button" className={styles.addButton} onClick={() => setAdding(true)}>
-              + Add {seatLabel(seats[0].id).toLowerCase()}
-            </button>
-          ))}
+            <div className={styles.addRow}>
+              {ROLES.map((role) => (
+                <button key={role.id} type="button" className={styles.addButton} onClick={() => { setForm(EMPTY_FORM); setAdding(role.id); }}>
+                  + Add {role.label.toLowerCase()}
+                </button>
+              ))}
+            </div>
+          )}
 
         <p className={styles.footnote}>
-          Founders HQ has two seats: founder and co-founder. Each founder signs in once, at {LOGIN_PATH}, with their own Mariox email and password — the same password for every Mariox app.
+          Founders HQ can have any number of founders and co-founders. Everyone signs in once, at {LOGIN_PATH}, with their own Mariox email and password — the same password for every Mariox app.
         </p>
       </section>
     </div>

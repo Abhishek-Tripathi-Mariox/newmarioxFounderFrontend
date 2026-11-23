@@ -467,7 +467,7 @@ export default function Home({ vm }) {
           {' '}
           {vm.br?.noFeed ? (<>
             <div style={{ padding: '22px 16px', fontSize: '13px', color: 'oklch(0.52 0.012 265)' }}>
-              {'Changes either founder makes will show up here.'}
+              {'Changes any founder makes will show up here.'}
             </div>
           </>) : null}
           {' '}

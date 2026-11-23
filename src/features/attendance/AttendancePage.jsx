@@ -11,6 +11,10 @@ import { useAttendanceModel, ATT_TEAMS } from './useAttendanceModel';
 import AttendanceDayTable from './components/AttendanceDayTable';
 import AttendanceSummaryTable from './components/AttendanceSummaryTable';
 import s from './AttendancePage.module.css';
+import PersonControls from '@/features/live/components/PersonControls';
+import { liveControls } from '@/features/live/liveData';
+import { attEdit, isCeo } from '@/api/workday';
+import { hasTeamView, isOwnSession } from '@/domain/permissions';
 
 const TEAM_OPTIONS = [{ value: '', label: 'All teams' }].concat(ATT_TEAMS.map((t) => ({ value: t, label: t })));
 
@@ -20,8 +24,16 @@ export default function AttendancePage() {
   const { AF, model: m } = useAttendanceModel(now);
   const setAttF = useStore((st) => st.setAttF);
   const flash = useStore((st) => st.flash);
-  // CSV export is a Super Admin (server) report; managers see their team on screen only.
-  const ceoView = useStore((st) => !st.viewAs);
+  // CSV export: anyone with "Attendance & reports" View, for the people in their scope (not while previewing).
+  const ceoView = useStore((st) => isOwnSession(st) && hasTeamView(st));
+  // "Attendance & reports" Edit (and the Super Admin): check people in / out, breaks and timers from today's rows.
+  const mayAct = useStore((st) => isOwnSession(st) && (isCeo(st.me) || attEdit(st.me)));
+  const live = useStore((st) => st.live);
+  const tasks = useStore((st) => st.tasks);
+  const projects = useStore((st) => st.projects);
+  const controlsFor = mayAct
+    ? (r) => (r.today && r.person ? <PersonControls row={liveControls({ live, tasks, projects }, r.person.id, r.person.sales)} /> : null)
+    : undefined;
 
   const onRange = (patch) => {
     if ('range' in patch) setAttF({ range: patch.range, person: AF.person, exp: '' });
@@ -67,6 +79,7 @@ export default function AttendancePage() {
           rows={m.rows}
           empty={m.empty}
           onToggle={(r) => setAttF({ exp: r.open ? '' : r.key })}
+          controlsFor={controlsFor}
         />
       )}
       {m.showSum && (

@@ -4,8 +4,8 @@ import { api, ApiError } from '@/api/client';
 import { Field } from '@/components/ui';
 import { LOGIN_PATH, signInQuery } from '@/lib/sso';
 import s from './LoginScreen.module.css';
+import PasswordField from './PasswordField';
 
-const BRANDS = { founders: 'Founders HQ', team: 'Team portal', partner: 'Partner portal' };
 const MIN = 8;
 const MAX = 128;
 const STEPS = {
@@ -20,12 +20,11 @@ const waitOf = (e) => (e instanceof ApiError && e.status === 429 ? Number(/wait 
 /**
  * Public page /forgot-password — self-service reset for every account (team, founders, clients,
  * partners), in the sign-in page's style: email → 6-digit code → new password → back to /login
- * with `?reset=1`, keeping the chosen box (`?as=`) and `?next=`. `?email=` pre-fills step 1.
+ * with `?reset=1`, keeping `?next=`. `?email=` pre-fills step 1.
  */
 export default function ForgotPasswordScreen() {
   const [params] = useSearchParams();
   const goTo = useNavigate();
-  const brand = BRANDS[params.get('as')];
   const [step, setStep] = useState('email');
   const [email, setEmail] = useState(() => params.get('email') || '');
   const [code, setCode] = useState('');
@@ -135,7 +134,7 @@ export default function ForgotPasswordScreen() {
           <div className={s.mark} aria-hidden="true">M</div>
           <div>
             <div className={s.brandName}>Mariox Software</div>
-            <div className={s.brandSub}>{brand || 'Reset password'}</div>
+            <div className={s.brandSub}>Reset password</div>
           </div>
         </div>
 
@@ -202,9 +201,7 @@ export default function ForgotPasswordScreen() {
             <>
               <input type="email" value={email.trim()} autoComplete="username" readOnly hidden />
               <Field label="New password">
-                <input
-                  className={s.input}
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   autoFocus
                   value={pw}
@@ -215,9 +212,7 @@ export default function ForgotPasswordScreen() {
                 />
               </Field>
               <Field label="Confirm new password">
-                <input
-                  className={s.input}
-                  type="password"
+                <PasswordField
                   autoComplete="new-password"
                   value={pw2}
                   maxLength={MAX}

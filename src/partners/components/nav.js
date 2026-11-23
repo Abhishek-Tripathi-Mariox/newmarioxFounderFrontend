@@ -1,17 +1,9 @@
+import { ppCan, ppCanRead } from '@/partners/lib/perms';
+
 // match: extra paths that keep this item highlighted (e.g. the Toolkit sub-pages).
+// sub: pages listed under the item in the sidebar while it is active (Toolkit).
+// detail: the header title on a page below the item (e.g. one lead under Pipeline).
 // prefetch: API URLs the page loads first; fetched on hover and when the app is idle so the page opens instantly.
-
-export const PARTNER_NAV = [
-  { href: '/partners/dashboard', label: 'Home', icon: 'home', prefetch: ['/leads', '/projects'] },
-  { href: '/partners/leads', label: 'Pipeline', icon: 'pipe', prefetch: ['/leads'] },
-  { href: '/partners/earnings', label: 'Earnings', icon: 'wallet', prefetch: ['/projects'] },
-  { href: '/partners/projects', label: 'Projects', icon: 'layers', prefetch: ['/projects?page=1&limit=10&sort=-closedAt'] },
-  { href: '/partners/scope', label: 'Toolkit', icon: 'tool', match: ['/partners/scope', '/partners/visits', '/partners/tech', '/partners/kit'], prefetch: ['/requests/scope?page=1&limit=10&sort=-createdAt'] },
-  { href: '/partners/support', label: 'Support', icon: 'help', prefetch: ['/requests/ticket?page=1&limit=10&sort=-createdAt'] },
-];
-
-// Shown in the phone tab bar; the rest live in the account menu.
-export const PARTNER_TABS = ['/partners/dashboard', '/partners/leads', '/partners/earnings', '/partners/scope', '/partners/support'];
 
 export const TOOLKIT_TABS = [
   { value: '/partners/scope', label: 'Scope approvals' },
@@ -20,18 +12,37 @@ export const TOOLKIT_TABS = [
   { value: '/partners/kit', label: 'Sales kit' },
 ];
 
-export const ADMIN_NAV = [
-  { href: '/partners/admin', label: 'Overview', icon: 'grid', exact: true, prefetch: ['/admin/users', '/admin/acquisition', '/leads', '/projects', '/requests/scope', '/requests/booking', '/requests/tech', '/requests/ticket'] },
-  { href: '/partners/admin/acquisition', label: 'Acquisition', icon: 'target', prefetch: ['/admin/acquisition'] },
-  { href: '/partners/admin/partners', label: 'Partners', icon: 'users', prefetch: ['/admin/users?page=1&limit=25&sort=-createdAt'] },
-  { href: '/partners/admin/leads', label: 'Leads', icon: 'pipe', prefetch: ['/leads', '/admin/users?role=partner'] },
-  { href: '/partners/admin/projects', label: 'Projects', icon: 'layers', prefetch: ['/projects?page=1&limit=10&sort=-closedAt', '/admin/users?role=partner'] },
-  { href: '/partners/admin/requests', label: 'Requests', icon: 'fileCheck', prefetch: ['/requests/scope?page=1&limit=25&sort=-createdAt'] },
-  { href: '/partners/admin/kit', label: 'Sales kit', icon: 'file' },
-  { href: '/partners/admin/settings', label: 'Settings', icon: 'tool' },
+export const PARTNER_NAV = [
+  { href: '/partners/dashboard', label: 'Home', icon: 'home', prefetch: ['/leads', '/projects'] },
+  { href: '/partners/leads', label: 'Pipeline', icon: 'pipe', detail: 'Lead', prefetch: ['/leads'] },
+  { href: '/partners/earnings', label: 'Earnings', icon: 'wallet', prefetch: ['/projects'] },
+  { href: '/partners/projects', label: 'Projects', icon: 'layers', prefetch: ['/projects?page=1&limit=10&sort=-closedAt'] },
+  { href: '/partners/scope', label: 'Toolkit', icon: 'tool', match: ['/partners/scope', '/partners/visits', '/partners/tech', '/partners/kit'], sub: TOOLKIT_TABS, prefetch: ['/requests/scope?page=1&limit=10&sort=-createdAt'] },
+  { href: '/partners/support', label: 'Support', icon: 'help', prefetch: ['/requests/ticket?page=1&limit=10&sort=-createdAt'] },
 ];
 
-export const ADMIN_TABS = ['/partners/admin', '/partners/admin/partners', '/partners/admin/leads', '/partners/admin/projects', '/partners/admin/requests'];
+// mod: the role permission (section) that shows the page; see lib/perms.js.
+export const ADMIN_NAV = [
+  { href: '/partners/admin', label: 'Overview', icon: 'grid', exact: true, mod: 'pp_overview', prefetch: ['/admin/users', '/admin/acquisition', '/leads', '/projects', '/requests/scope', '/requests/booking', '/requests/tech', '/requests/ticket'] },
+  { href: '/partners/admin/acquisition', label: 'Acquisition', icon: 'target', mod: 'pp_acq', prefetch: ['/admin/acquisition'] },
+  { href: '/partners/admin/partners', label: 'Partners', icon: 'users', detail: 'Partner', mod: 'pp_partners', prefetch: ['/admin/users?page=1&limit=25&sort=-createdAt'] },
+  { href: '/partners/admin/leads', label: 'Leads', icon: 'pipe', detail: 'Lead', mod: 'pp_leads', prefetch: ['/leads', '/admin/users?role=partner'] },
+  { href: '/partners/admin/projects', label: 'Projects', icon: 'layers', mod: 'pp_projects', prefetch: ['/projects?page=1&limit=10&sort=-closedAt', '/admin/users?role=partner'] },
+  { href: '/partners/admin/requests', label: 'Requests', icon: 'fileCheck', mod: 'pp_requests', prefetch: ['/requests/scope?page=1&limit=25&sort=-createdAt'] },
+  { href: '/partners/admin/kit', label: 'Sales kit', icon: 'file', mod: 'pp_kit' },
+  { href: '/partners/admin/settings', label: 'Settings', icon: 'tool', mod: 'pp_settings' },
+];
+
+/**
+ * The admin console pages this admin's role can view, with prefetches limited to what they may read.
+ * Without a `user` (no /me yet) nothing is listed.
+ */
+export function adminNavFor(user) {
+  return ADMIN_NAV.filter(n => ppCan(user, n.mod)).map(n => (n.prefetch ? { ...n, prefetch: n.prefetch.filter(p => ppCanRead(user, p)) } : n));
+}
+
+/** First admin page this admin can open ('/partners/admin/account' when none). */
+export const firstAdminPage = (user) => adminNavFor(user)[0]?.href ?? '/partners/admin/account';
 
 export function isActive(item, path, all) {
   const hits = (p) => path === p || path.startsWith(p + '/');

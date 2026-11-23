@@ -1,9 +1,12 @@
 /* Ported from the Founders HQ prototype (CEO Portal/netlify-site/index.html) by tools/split_logic.py. */
 import HQCompanies from './04-companies';
-import { PEOPLE, COS, coColors, ensureCos, segOf, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, XCH, XAUTH_DEF, XMATTERS, XCST, XPST, XCFLD, XPFLD, XRST, XSTL, XLVL, XEXC, XAITAG, CX_HUES, XfmtL, XfmtIso, XnextCode, XmigrateCons, COUNTRIES, ENTITIES, AI_ON } from './core';
+import { PEOPLE, MEMBERS, memberOpts, allAgreed, othersOf, namesOf, ALL_FOUNDERS, COS, coColors, ensureCos, segOf, iso, plus, dayDiff, uid, INK_C, RED, AMBER, GREEN, MUTED, XCH, XAUTH_DEF, XMATTERS, XCST, XPST, XCFLD, XPFLD, XRST, XSTL, XLVL, XEXC, XAITAG, CX_HUES, XfmtL, XfmtIso, XnextCode, XmigrateCons, COUNTRIES, ENTITIES, AI_ON } from './core';
 
-/** The two founders whose joint approval makes rules, amendments and exceptions binding. */
-const FOUNDERS = ['rahul', 'saswat'];
+/**
+ * The founders and co-founders whose joint approval makes rules, amendments and exceptions binding: every
+ * current HQ member (the live list from core, kept up to date by applyAccountNames).
+ */
+const FOUNDERS = MEMBERS;
 
 /** Tag colours [background, text] for the "Waiting for you" list on the overview. */
 const TODO_TAG_COLORS = {
@@ -87,7 +90,9 @@ export default class HQConstitution extends HQCompanies {
 
     const patchState = patch => this.setState(patch);
     const person = id => PEOPLE[id] || PEOPLE.both;
-    const otherFounder = me === 'rahul' ? 'saswat' : 'rahul';
+    /** "Asha", "Asha and Ben", …: everyone who still has to approve after me. */
+    const othersTxt = namesOf(othersOf(me)) || 'Another founder';
+    const othersVerb = verb => othersTxt + ' ' + verb + (othersOf(me).length === 1 ? 's' : '');
     const updateConstitution = fn => this.upd(draft => {
       ensureCos(draft);
       XmigrateCons(draft.constitution);
@@ -98,7 +103,7 @@ export default class HQConstitution extends HQCompanies {
       draftConstitution.log = [{ at: Date.now(), by: me, text }, ...(draftConstitution.log || [])].slice(0, 300);
     };
     const today = iso(new Date());
-    const approvedByBoth = approvers => FOUNDERS.every(founder => (approvers || []).includes(founder));
+    const approvedByBoth = approvers => allAgreed(approvers);
 
     /** "just now" / "5 min ago" / "3h ago" / "2d ago", then a date after 30 days. */
     const relativeTime = ms => {
@@ -134,14 +139,14 @@ export default class HQConstitution extends HQCompanies {
       dis: !canAct,
       cur: canAct ? 'pointer' : 'default',
     });
-    /** An exception is Active only once both founders approve it, until it is revoked or its end date passes. */
+    /** An exception is Active only once all founders approve it, until it is revoked or its end date passes. */
     const exceptionStatus = exception =>
       exception.revoked ? 'Revoked'
         : !approvedByBoth(exception.appr) ? 'Pending'
           : (exception.until && exception.until < today) ? 'Expired'
             : 'Active';
     const companyName = id => (allCompanies.find(company => company.id === id) || {}).name || '—';
-    const ownerLabel = owner => owner === 'both' ? 'Both founders' : owner === 'team' ? 'Company owner' : person(owner).first;
+    const ownerLabel = owner => owner === 'both' ? ALL_FOUNDERS : owner === 'team' ? 'Company owner' : person(owner).first;
     // A rule's scope is either 'all' or an array of company ids.
     const scopeLabel = rule => !Array.isArray(rule.scope)
       ? 'All companies'
@@ -155,7 +160,7 @@ export default class HQConstitution extends HQCompanies {
         rule.status = 'Active';
         if (!rule.effective) rule.effective = today;
         if (!(rule.versions || []).length) {
-          rule.versions = [{ v: rule.v || 1, title: rule.title, text: rule.text, at: Date.now(), by: rule.by || me, reason: 'Approved by both founders' }];
+          rule.versions = [{ v: rule.v || 1, title: rule.title, text: rule.text, at: Date.now(), by: rule.by || me, reason: 'Approved by all founders' }];
         }
         logChange(draftConstitution, rule.code + ' “' + rule.title + '” is now active');
       } else {
@@ -206,7 +211,7 @@ export default class HQConstitution extends HQCompanies {
         }
       }
       draftConstitution.version = bumpVersion(draftConstitution.version);
-      logChange(draftConstitution, 'Amendment approved by both founders. Constitution is now version ' + draftConstitution.version);
+      logChange(draftConstitution, 'Amendment approved by all founders. Constitution is now version ' + draftConstitution.version);
     };
 
     // The old "principles" tab now lands on the overview.
@@ -470,7 +475,7 @@ export default class HQConstitution extends HQCompanies {
     view.canBulk = !!bulkApprovable.length;
     view.bulkN = String(bulkApprovable.length);
     view.bulkApprove = () => {
-      if (!confirm('Approve ' + bulkApprovable.length + ' rules as ' + person(me).first + '? Each becomes active once ' + person(otherFounder).first + ' also approves.')) return;
+      if (!confirm('Approve ' + bulkApprovable.length + ' rules as ' + person(me).first + '? Each becomes active once ' + othersVerb('also approve') + '.')) return;
       const ids = bulkApprovable.map(rule => rule.id);
       updateConstitution(draftConstitution => {
         draftConstitution.rules.forEach(rule => {
@@ -553,9 +558,9 @@ export default class HQConstitution extends HQCompanies {
         propose: () => patchState({ cxa: { type: 'change', ruleId: selectedRule.id, title: selectedRule.title, text: selectedRule.text, reason: '', eff: today, ch: selectedRule.ch, err: '' } }),
         repeal: () => patchState({ cxa: { type: 'repeal', ruleId: selectedRule.id, title: selectedRule.title, text: selectedRule.text, reason: '', eff: today, ch: selectedRule.ch, err: '' } }),
         reqExc: () => patchState({ cxe: { ruleId: selectedRule.id, co: '', reason: '', until: plus(30), err: '' } }),
-        apprTxt: selectedRule.status === 'Active' ? 'Approved by both founders'
+        apprTxt: selectedRule.status === 'Active' ? 'Approved by all founders'
           : selectedRule.status === 'Archived' ? 'Repealed'
-            : (selectedRule.sign || []).length + ' of 2 approved',
+            : (selectedRule.sign || []).filter(signer => FOUNDERS.includes(signer)).length + ' of ' + FOUNDERS.length + ' approved',
         signs: FOUNDERS.map(founder => {
           const approved = (selectedRule.sign || []).includes(founder);
           const isMine = founder === me;
@@ -581,7 +586,7 @@ export default class HQConstitution extends HQCompanies {
             return;
           }
           updateSelectedRule((rule, draftConstitution) => signRule(draftConstitution, rule));
-          this.toastMsg('Sent to ' + person(otherFounder).first + ' for approval');
+          this.toastMsg('Sent to ' + othersTxt + ' for approval');
         },
         // Moving a draft to another chapter gives it that chapter's next code.
         ch: selectField(selectedRule.ch, e => updateSelectedRule((rule, draftConstitution) => {
@@ -610,7 +615,7 @@ export default class HQConstitution extends HQCompanies {
             }),
           };
         }),
-        owner: selectField(selectedRule.owner, e => updateSelectedRule(rule => { rule.owner = e.target.value; }), [['both', 'Both founders'], ['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first], ['team', 'Company owner']]),
+        owner: selectField(selectedRule.owner, e => updateSelectedRule(rule => { rule.owner = e.target.value; }), [['both', ALL_FOUNDERS], ...memberOpts(false).map(([id, label]) => [id, label]), ['team', 'Company owner']]),
         eff: selectedRule.effective || '',
         onEff: e => updateSelectedRule(rule => { rule.effective = e.target.value; }),
         docs: (selectedRule.docs || []).map((doc, docIndex) => ({
@@ -664,7 +669,7 @@ export default class HQConstitution extends HQCompanies {
     view.amdSteps = [
       'Founder proposes a change',
       'Reason for change is recorded',
-      'Other founder reviews it',
+      'The other founders review it',
       'Approval is obtained',
       'New version becomes effective',
       'Previous version stays in history',
@@ -775,7 +780,7 @@ export default class HQConstitution extends HQCompanies {
       const patchAmendmentDraft = patch => patchState({ cxa: { ...amendmentDraft, ...patch, err: '' } });
       const targetRule = ruleById(amendmentDraft.ruleId);
       view.A = {
-        otherTxt: person(otherFounder).first + ' reviews it. It takes effect only when both founders approve, and the current version stays in history.',
+        otherTxt: othersVerb('review') + ' it. It takes effect only when all founders approve, and the current version stays in history.',
         typeSeg: segOf([['change', 'Change a rule'], ['new', 'New rule'], ['repeal', 'Repeal a rule']], amendmentDraft.type, type => patchAmendmentDraft(type === 'new' ? { type, ruleId: '', title: '', text: '' } : { type })),
         needRule: amendmentDraft.type !== 'new',
         isNew: amendmentDraft.type === 'new',
@@ -796,7 +801,7 @@ export default class HQConstitution extends HQCompanies {
         onEff: e => patchAmendmentDraft({ eff: e.target.value }),
         err: amendmentDraft.err || '',
         close: () => patchState({ cxa: null }),
-        // The proposer's approval is recorded straight away; the other founder's completes it.
+        // The proposer's approval is recorded straight away; the other founders' complete it.
         submit: () => {
           const fail = message => patchState({ cxa: { ...amendmentDraft, err: message } });
           if (amendmentDraft.type !== 'new' && !targetRule) return fail('Pick the rule.');
@@ -824,7 +829,7 @@ export default class HQConstitution extends HQCompanies {
               + (amendmentDraft.type === 'new' ? 'a new rule' : amendmentDraft.type === 'repeal' ? 'repealing ' + targetRule.code : 'a change to ' + targetRule.code));
           });
           patchState({ cxa: null, cxr: null, cnTab: 'amend', cxaf: 'open' });
-          this.toastMsg('Sent to ' + person(otherFounder).first + ' for review');
+          this.toastMsg('Sent to ' + othersTxt + ' for review');
         },
       };
     }
@@ -902,7 +907,7 @@ export default class HQConstitution extends HQCompanies {
     if (exceptionDraft) {
       const patchExceptionDraft = patch => patchState({ cxe: { ...exceptionDraft, ...patch, err: '' } });
       view.E = {
-        otherTxt: 'Becomes active when ' + person(otherFounder).first + ' also approves.',
+        otherTxt: 'Becomes active when ' + othersVerb('also approve') + '.',
         rule: selectField(exceptionDraft.ruleId, e => patchExceptionDraft({ ruleId: e.target.value }), [['', 'Pick a rule…'], ...activeRules.map(rule => [rule.id, rule.code + ' · ' + rule.title])]),
         co: selectField(exceptionDraft.co, e => patchExceptionDraft({ co: e.target.value }), [['', 'Pick a company…'], ...openCompanies.map(company => [company.id, company.name])]),
         reason: exceptionDraft.reason,
@@ -931,7 +936,7 @@ export default class HQConstitution extends HQCompanies {
             logChange(draftConstitution, person(me).first + ' requested an exception for ' + companyName(exceptionDraft.co));
           });
           patchState({ cxe: null, cnTab: 'exceptions', cxef: 'pending' });
-          this.toastMsg('Sent to ' + person(otherFounder).first + ' for approval');
+          this.toastMsg('Sent to ' + othersTxt + ' for approval');
         },
       };
     }
@@ -942,7 +947,7 @@ export default class HQConstitution extends HQCompanies {
     const stages = isProduct ? XPST : XCST;
     const ventureView = state.cxvv || 'board';
     const fieldsOf = venture => venture.type === 'product' ? XPFLD : XCFLD;
-    // Proposals cannot pass this stage until the brief is complete and both founders approve.
+    // Proposals cannot pass this stage until the brief is complete and all founders approve.
     const gateStageIndex = venture => venture.type === 'product' ? 4 : 3;
     /** Share of the brief that is filled in; the name counts as one extra field. */
     const venturePct = venture => {
@@ -954,7 +959,7 @@ export default class HQConstitution extends HQCompanies {
     const gateMessage = venture => {
       const missing = [];
       if (venturePct(venture) < 100) missing.push('fill in every field');
-      if (!approvedByBoth(venture.appr)) missing.push('get approval from both founders');
+      if (!approvedByBoth(venture.appr)) missing.push('get approval from all founders');
       return missing.length
         ? 'Before moving past ' + (venture.type === 'product' ? XPST : XCST)[gateStageIndex(venture)][0] + ': ' + missing.join(' and ') + '.'
         : '';
@@ -1003,7 +1008,7 @@ export default class HQConstitution extends HQCompanies {
     view.vRule = {
       code: ventureRule ? ventureRule.code : '',
       text: isProduct
-        ? 'Build fast, validate early, invest based on evidence. Every product passes 10 stages; it cannot reach MVP until the brief is complete and both founders approve.'
+        ? 'Build fast, validate early, invest based on evidence. Every product passes 10 stages; it cannot reach MVP until the brief is complete and all founders approve.'
         : (ventureRule ? ventureRule.text : ''),
       open: () => ventureRule && patchState({ cxr: ventureRule.id }),
     };
@@ -1145,7 +1150,7 @@ export default class HQConstitution extends HQCompanies {
         stageT: String(stageList.length),
         stageName: stageList[selectedVenture.stage][0],
         stageQ: stageList[selectedVenture.stage][1],
-        owner: selectField(selectedVenture.owner, e => updateVenture(venture => { venture.owner = e.target.value; }), [['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first], ['both', 'Both founders']]),
+        owner: selectField(selectedVenture.owner, e => updateVenture(venture => { venture.owner = e.target.value; }), memberOpts().map(([id, label]) => [id, label])),
         co: selectField(selectedVenture.co || '', e => updateVenture(venture => { venture.co = e.target.value; }), [['', 'Pick a company…'], ...openCompanies.map(company => [company.id, company.name])]),
         signs: FOUNDERS.map(founder => {
           const approved = (selectedVenture.appr || []).includes(founder);
@@ -1214,7 +1219,7 @@ export default class HQConstitution extends HQCompanies {
     view.authLv = [
       [1, 'Independent authority', 'Routine operational decisions made by the responsible founder or delegated manager within approved budgets and limits.', ['Spends within budget and limit', 'Hiring within approved headcount', 'Day-to-day operations'], 'oklch(0.55 0.13 150)'],
       [2, 'Joint approval', 'New company launches, major investments, borrowing, ownership changes, large commitments and strategic pivots.', ['New companies', 'Major investments', 'Borrowing', 'Ownership changes', 'Strategic pivots'], 'oklch(0.62 0.14 70)'],
-      [3, 'Reserved matters', 'Matters requiring formal approval under shareholder agreements, board rules or applicable law. Neither founder should assume unilateral authority over these matters.', ['Shareholder agreement matters', 'Board resolutions', 'Statutory approvals'], 'oklch(0.55 0.17 25)'],
+      [3, 'Reserved matters', 'Matters requiring formal approval under shareholder agreements, board rules or applicable law. No founder should assume unilateral authority over these matters.', ['Shareholder agreement matters', 'Board resolutions', 'Statutory approvals'], 'oklch(0.55 0.17 25)'],
     ].map(([level, name, text, examples, col]) => ({ n: String(level), name, text, ex: examples.map(example => ({ t: example })), col }));
 
     // "Can I decide this alone?" checker: the level is the matter's own level, raised to 2 above the spending limit.
@@ -1225,7 +1230,7 @@ export default class HQConstitution extends HQCompanies {
     const limit = Number(authority.limit) || 0;
     const level = Math.max(matter[2], amount > limit ? 2 : 1);
     view.chk = {
-      who: segOf([['rahul', PEOPLE.rahul.first], ['saswat', PEOPLE.saswat.first]], check.who, who => setCheck({ who })),
+      who: segOf(memberOpts(false), check.who, who => setCheck({ who })),
       matter: selectField(check.matter, e => setCheck({ matter: e.target.value }), XMATTERS.map(item => [item[0], item[1]])),
       amt: check.amt,
       onAmt: e => setCheck({ amt: e.target.value }),
@@ -1233,20 +1238,20 @@ export default class HQConstitution extends HQCompanies {
       bg: LEVEL_COLORS[level][0],
       fg: LEVEL_COLORS[level][1],
       head: level === 1 ? person(check.who).first + ' can decide this alone'
-        : level === 2 ? `Needs both ${PEOPLE.rahul.first} and ${PEOPLE.saswat.first}`
+        : level === 2 ? 'Needs all founders: ' + namesOf(FOUNDERS)
           : 'Reserved matter. Formal approval needed',
       text: level === 1
         ? 'Within approved budgets and the ' + this.money(limit) + ' Level 1 limit. Record it in Decisions if it affects strategy, money, people or product.'
         : level === 2
-          ? (amount > limit && matter[2] < 2 ? 'The amount is above the ' + this.money(limit) + ' Level 1 limit. ' : '') + 'Both founders approve it, and it is logged in Decisions.'
-          : 'Needs formal approval under the shareholder agreement, board rules or applicable law. Neither founder decides alone. Check with your CA or lawyer.',
+          ? (amount > limit && matter[2] < 2 ? 'The amount is above the ' + this.money(limit) + ' Level 1 limit. ' : '') + 'All founders approve it, and it is logged in Decisions.'
+          : 'Needs formal approval under the shareholder agreement, board rules or applicable law. No founder decides alone. Check with your CA or lawyer.',
       needLog: level >= 2,
       log: () => this.go('decisions'),
     };
     view.auth = {
       limit: String(authority.limit),
       onLimit: e => updateAuthority(draftAuthority => { draftAuthority.limit = Number(e.target.value) || 0; }),
-      limitTxt: 'Anything above ' + this.money(limit) + ' needs both founders.',
+      limitTxt: 'Anything above ' + this.money(limit) + ' needs all founders.',
       emergency: authority.emergency,
       onEmergency: e => updateAuthority(draftAuthority => { draftAuthority.emergency = e.target.value; }),
       absence: authority.absence,
@@ -1281,7 +1286,7 @@ export default class HQConstitution extends HQCompanies {
         'Can we invest ₹50 lakh in a new product?',
         'What is our process for launching a new company?',
         'Who has authority to approve new hiring?',
-        `Can ${PEOPLE.saswat.first} independently approve this expense?`,
+        'Can a co-founder independently approve this expense?',
         'What is our process for entering the USA market?',
       ].map(suggestion => ({ t: suggestion, go: () => patchState({ cxq: suggestion }) })),
       legend: Object.entries(XAITAG).map(([tag, colors]) => ({ tag, bg: colors[0], fg: colors[1], d: colors[2] })),

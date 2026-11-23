@@ -33,12 +33,6 @@
 /* tables: clickable rows */
 .pp-root .tr.click { cursor: pointer; }
 
-/* account menu under the avatar */
-.pp-root .acct { position: relative; }
-.pp-root .acct .menu { position: absolute; right: 0; top: 52px; }
-.pp-root .menu .who { padding: 10px 12px 8px; }
-.pp-root .menu .who b { display: block; font-weight: 600; }
-
 /* toast with an error tone */
 .pp-root .toast.err .ico { background: rgba(255, 122, 110, .16); color: #ff7a6e; }
 
@@ -106,9 +100,6 @@
 .pp-root .btn:focus-visible, .pp-root .chip:focus-visible, .pp-root .dd-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* theme switcher in the account menu */
-.pp-root .theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; margin: 4px 6px 6px; border-radius: 12px; background: var(--panel-3); }
-.pp-root .theme-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; border-radius: 9px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
-.pp-root .theme-seg button.on { background: var(--panel); color: var(--ink); box-shadow: var(--sh-1); }
 
 /* ---------- compact, clickable stat tiles ---------- */
 .pp-root .stats { display: grid; gap: 12px; }

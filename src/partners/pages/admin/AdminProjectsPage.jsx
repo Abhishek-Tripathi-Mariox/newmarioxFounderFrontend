@@ -4,9 +4,11 @@ import { ProjectList } from '@/partners/components/projects/ProjectList';
 import { Button, Drawer, PageHeader, useToast } from '@/partners/components/ui';
 import { useApi } from '@/partners/hooks/useApi';
 import { api } from '@/partners/api';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 
 export default function AdminProjectsPage() {
   const toast = useToast();
+  const can = usePpCan();
   const users = useApi('/admin/users?role=partner');
   const partners = users.data?.users ?? [];
   const [editing, setEditing] = useState(null);
@@ -35,17 +37,17 @@ export default function AdminProjectsPage() {
         eyebrow="Admin"
         title="Projects & payouts"
         subtitle="Update delivery stage, record client payments and release partner commissions."
-        actions={<Button variant="fire" icon="plus" onClick={() => setEditing({ values: emptyProject() })}>New project</Button>}
+        actions={can('pp_projects', 'c') && <Button variant="fire" icon="plus" onClick={() => setEditing({ values: emptyProject() })}>New project</Button>}
       />
       <ProjectList
         partners={partners}
         listRef={r => (reload.current = r)}
-        action={p => (
+        action={can('pp_projects', 'e') || can('pp_projects', 'd') ? p => (
           <span className="row">
-            <Button size="sm" icon="note" onClick={() => setEditing({ id: p._id, values: toValues(p) })}>Edit</Button>
-            <Button size="sm" variant="danger" icon="trash" onClick={() => remove(p)} aria-label="Delete" />
+            {can('pp_projects', 'e') && <Button size="sm" icon="note" onClick={() => setEditing({ id: p._id, values: toValues(p) })}>Edit</Button>}
+            {can('pp_projects', 'd') && <Button size="sm" variant="danger" icon="trash" onClick={() => remove(p)} aria-label="Delete" />}
           </span>
-        )}
+        ) : undefined}
       />
       {editing && (
         <Drawer open title={editing.id ? 'Edit project' : 'New project'} subtitle="Delivery stage, milestones and the client payment schedule." onClose={() => setEditing(null)}>

@@ -17,7 +17,7 @@ async function createWorkspace() {
 
 /**
  * Everything Founders HQ needs before it can render: the shared workspace, this user's preferences,
- * the sealed vault, and the accounts (which name the two seats).
+ * the sealed vault, and the accounts (the founders and co-founders: HQ's people).
  */
 export async function loadWorkspace() {
   const [users, workspace, prefs, vault] = await Promise.all([listUsers(), fetchWorkspace(), fetchPrefs(), fetchVault()]);

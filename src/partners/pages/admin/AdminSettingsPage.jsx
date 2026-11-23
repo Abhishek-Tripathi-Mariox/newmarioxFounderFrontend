@@ -4,6 +4,7 @@ import { useSettings } from '@/partners/components/SettingsProvider';
 import { Badge, Button, Card, FormError, Input, PageHeader, PhoneInput, Select, Tabs, Textarea, useToast, SkeletonCards } from '@/partners/components/ui';
 import { useForm } from '@/partners/hooks/useForm';
 import { api } from '@/partners/api';
+import { usePpCan } from '@/partners/hooks/usePpCan';
 import { TONES, stageColor } from '@/partners/lib/pipeline';
 
 import { R, all } from '@/partners/lib/validate';
@@ -24,6 +25,7 @@ const blankContact = () => ({ title: '', name: '', role: '', phone: '', email: '
 
 function SettingsForm({ initial }) {
   const toast = useToast();
+  const mayEdit = usePpCan()('pp_settings', 'e');
   const { reload } = useSettings();
   const [section, setSection] = useState('pipeline');
   const [checked, setChecked] = useState(false); // show contact errors after the first save attempt
@@ -46,9 +48,11 @@ function SettingsForm({ initial }) {
     <form className="stack" style={{ gap: 20 }} onSubmit={save}>
       <div className="between wrap">
         <Tabs tabs={[{ value: 'pipeline', label: 'Sales pipeline' }, { value: 'contacts', label: 'Contacts & announcement' }]} value={section} onChange={setSection} />
-        <Button variant="fire" icon="check" loading={form.busy}>Publish settings</Button>
+        {mayEdit ? <Button variant="fire" icon="check" loading={form.busy}>Publish settings</Button> : <span className="sub">View only: your role can’t change settings</span>}
       </div>
       <FormError error={form.error} />
+      {/* View only: every field and list button is disabled. */}
+      <fieldset disabled={!mayEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, gap: 20 }} className="stack">
 
       {section === 'pipeline' && (
         <div className="bento">
@@ -127,6 +131,7 @@ function SettingsForm({ initial }) {
           </Card>
         </>
       )}
+      </fieldset>
     </form>
   );
 }

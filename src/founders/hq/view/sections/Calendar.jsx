@@ -4,6 +4,15 @@ import TaskModalHost from '../../teamTasks/TaskModalHost';
 import { show, attr, inlineStyle, asList } from '../rt';
 import TeamMark from './TeamMark';
 
+/** Marks a founder task (My tasks) among team tasks: "Me" on month chips, "My task" in the day list. */
+function MineTag({ compact = false }) {
+  return (
+    <span style={{ flexShrink: 0, fontSize: compact ? '9.5px' : '11px', fontWeight: '700', letterSpacing: '0.02em', padding: compact ? '0 4px' : '1px 6px', borderRadius: '4px', background: 'oklch(0.3 0.015 265)', color: '#fff' }}>
+      {compact ? 'Me' : 'My task'}
+    </span>
+  );
+}
+
 export default function Calendar({ vm }) {
   return (<>
     {' '}
@@ -24,7 +33,7 @@ export default function Calendar({ vm }) {
         </div>
       </div>
       {' '}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         {' '}
         <div style={{
             display: 'flex',
@@ -72,7 +81,21 @@ export default function Calendar({ vm }) {
           {' '}
         </div>
         {' '}
-        <button onClick={vm.cal?.newTask} style={{
+        <button onClick={vm.cal?.newMyTask} title="Your own founder task, due on the selected day" style={{
+            height: '38px',
+            border: '1px solid oklch(0.88 0.008 85)',
+            background: '#fff',
+            color: 'oklch(0.23 0.015 265)',
+            borderRadius: '9px',
+            padding: '0 16px',
+            fontSize: '13.5px',
+            fontWeight: '600',
+            cursor: 'pointer',
+          }} className="scp10">
+          {'+ My task'}
+        </button>
+        {' '}
+        <button onClick={vm.cal?.newTask} title="A task for your team, due on the selected day" style={{
             height: '38px',
             border: '0',
             background: 'var(--acc, oklch(0.5 0.17 265))',
@@ -83,14 +106,15 @@ export default function Calendar({ vm }) {
             fontWeight: '600',
             cursor: 'pointer',
           }} className="scp15">
-          {'+ New task'}
+          {'+ Team task'}
         </button>
         {' '}
       </div>
       {' '}
     </div>
     {' '}
-    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', borderBottom: '1px solid oklch(0.92 0.005 85)' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', borderBottom: '1px solid oklch(0.92 0.005 85)' }}>
+    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
       {' '}
       {asList(vm.cal?.coTabs).map((tab, index) => (<Fragment key={index}>
         <button onClick={tab?.go} style={inlineStyle(`display:flex;align-items:center;gap:8px;border:0;background:none;padding:8px 12px 10px;font-size:14px;font-weight:600;cursor:pointer;color:${attr(tab?.fg)};border-bottom:2px solid ${attr(tab?.bd)};margin-bottom:-1px`)}>
@@ -107,6 +131,22 @@ export default function Calendar({ vm }) {
           </span>
         </button>
       </Fragment>))}
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', paddingBottom: '6px' }}>
+      <div role="group" aria-label="Show tasks" style={{ display: 'inline-flex', gap: '2px', padding: '3px', borderRadius: '9px', background: 'oklch(0.945 0.005 85)' }}>
+        {asList(vm.cal?.kindTabs).map((tab, index) => (
+          <button key={index} type="button" onClick={tab?.go} title={tab?.tip} style={inlineStyle(`display:flex;align-items:center;gap:6px;height:28px;border:0;border-radius:7px;padding:0 10px;font-size:12.5px;font-weight:600;cursor:pointer;background:${attr(tab?.bg)};color:${attr(tab?.fg)};box-shadow:${attr(tab?.sh)}`)}>
+            <span>{show(tab?.label)}</span>
+            <span style={{ fontSize: '12px', fontWeight: '500', color: 'oklch(0.52 0.012 265)' }}>{show(tab?.n)}</span>
+          </button>
+        ))}
+      </div>
+      {asList(vm.cal?.pills).map((pill, index) => (
+        <span key={index} title={pill?.tip} style={inlineStyle(`display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:${attr(pill?.bg)};color:${attr(pill?.fg)}`)}>
+          {show(pill?.label)} {show(pill?.v)}
+        </span>
+      ))}
+    </div>
       {' '}
     </div>
     {' '}
@@ -122,8 +162,8 @@ export default function Calendar({ vm }) {
         }}>
         {' '}
         <div style={{
-            padding: '14px 16px',
-            fontSize: '16px',
+            padding: '10px 14px',
+            fontSize: '15px',
             fontWeight: '600',
             borderBottom: '1px solid oklch(0.92 0.005 85)',
           }}>
@@ -161,7 +201,7 @@ export default function Calendar({ vm }) {
           {' '}
           {asList(vm.cal?.days).map((day, index) => (<Fragment key={index}>
             {' '}
-            <div onClick={day?.pick} style={inlineStyle(`min-height:112px;background:${attr(day?.bg)};box-shadow:${attr(day?.ring)};padding:6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0`)}>
+            <div onClick={day?.pick} style={inlineStyle(`min-height:clamp(64px, calc((100vh - 400px) / ${vm.cal?.weeks || 6}), 112px);background:${attr(day?.bg)};box-shadow:${attr(day?.ring)};padding:6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0`)}>
               {' '}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={inlineStyle(`width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:600;background:${attr(day?.numBg)};color:${attr(day?.numFg)}`)}>
@@ -183,8 +223,9 @@ export default function Calendar({ vm }) {
                 <button onClick={chip?.open} title={chip?.title} style={inlineStyle(`display:flex;align-items:center;gap:5px;border:0;border-radius:5px;padding:3px 6px;background:${attr(chip?.bg)};color:${attr(chip?.fg)};font-size:11.5px;font-weight:500;cursor:pointer;text-align:left;min-width:0`)}>
                   <span style={inlineStyle(`width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${attr(chip?.dot)}`)} />
                   <TeamMark item={chip} compact />
+                  {chip?.mine ? <MineTag compact /> : null}
                   <span style={inlineStyle(`overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:${attr(chip?.deco)}`)}>
-                    {show(chip?.title)}
+                    {show(chip?.label)}
                   </span>
                 </button>
               </Fragment>))}
@@ -252,6 +293,7 @@ export default function Calendar({ vm }) {
                     {show(task?.title)}
                   </span>
                   <TeamMark item={task} />
+                  {task?.mine ? <MineTag /> : null}
                 </span>
                 <span style={{ fontSize: '12px', color: 'oklch(0.52 0.012 265)' }}>
                   {show(task?.meta)}
