@@ -39,14 +39,22 @@ export function can(state, mod, act = 'v') {
   return !!(p && p[act || 'v']);
 }
 
-/** Can the viewed-as user manage this project as its PM? */
+/**
+ * May the viewed-as user manage (edit) this project? Same rule as the backend isPMof(): Super Admin
+ * always; otherwise Projects → Edit, and the project inside the role's projects scope — scope All =
+ * any project, Team / Own = projects they run as PM or are on the team of.
+ */
 export function isPMof(state, p) {
   if (!state.viewAs) return true;
   const u = findUser(state, state.viewAs);
-  if (!u) return false;
+  if (!u || !p) return false;
   if (u.role === 'r-super') return true;
-  // The project's PM, in any role that can edit projects (not only the built-in Project Manager).
-  return can(state, 'projects', 'e') && !!p && (u.memberId === p.pm || u.id === `u-${p.pm}`);
+  if (!can(state, 'projects', 'e')) return false;
+  const r = (state.roles || []).find((x) => x.id === u.role);
+  const perm = r && r.perms && r.perms.projects;
+  if ((perm && perm.scope) === 'all' || !(perm && perm.scope)) return true;
+  const mid = u.memberId || pidOf(u);
+  return !!mid && (p.pm === mid || u.id === `u-${p.pm}` || (p.team || []).includes(mid));
 }
 
 /**
