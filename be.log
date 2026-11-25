@@ -1,0 +1,3 @@
+Invalid environment configuration:
+  - JWT_ACCESS_SECRET: Invalid input: expected string, received undefined
+  - JWT_REFRESH_SECRET: Invalid input: expected string, received undefined
